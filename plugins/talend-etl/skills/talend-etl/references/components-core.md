@@ -170,7 +170,7 @@ Lookup mode: when tDBInput feeds a tMap lookup input with "Reload at each row", 
 | Use batch mode / Batch Size (Advanced) | `addBatch()/executeBatch()` every N rows (default 10000 for MySQL, 100 for others, unverified). Only for Insert / Update / Delete actions. Disables per-row Reject rows (whole batch fails; only ERROR_MESSAGE) |
 | Commit every | number of rows per `commit()` (default 10000). Only shown when Use an existing connection is off; with an existing connection the tDBConnection's Auto Commit / tDBCommit decides. Set Commit every >= Batch size and a multiple of it |
 | Additional Columns | table: Name / SQL expression (e.g. `"NOW()"`, `"UPPER(?)"`, `"nextval('seq')"`) / Position (Before / After / Replace) / Reference column. Not available with Use batch mode on most DBs, nor with bulk actions |
-| Use field options | table per schema column: Update Key / Deletion Key / Updatable / Insertable (and `Use Update Statement`/`Use Insert`? no: columns are Key for update, Key for delete, Updatable, Insertable). Lets you update on a non-PK column or exclude an auto-increment column from INSERT |
+| Use field options | table per schema column: Update Key / Deletion Key / Updatable / Insertable (column headers: Column / Update Key / Deletion Key / Updatable / Insertable). Lets you update on a non-PK column or exclude an auto-increment column from INSERT |
 | Enable debug mode | print generated SQL per row |
 | Support null in "SQL WHERE" statement | generates `col IS NULL` instead of `col = NULL` for key columns that are null in Update/Delete |
 | Use Hint Options (Oracle) | `/*+ APPEND */` etc. |
@@ -229,16 +229,16 @@ tDBConnection_1 (Auto Commit off)
 | DB | Components | Mechanism | Key settings |
 |---|---|---|---|
 | MySQL | tMysqlOutputBulk, tMysqlBulkExec, tMysqlOutputBulkExec | `LOAD DATA [LOCAL] INFILE` | Local filename (Load data local infile needs `allowLoadLocalInfile=true` in JDBC params and `local_infile=1` server-side); Action on data: Insert / Update / Replace / Ignore; Field terminated by / Enclosed by / Lines terminated by; Set columns names; Records contain NULL value |
-| PostgreSQL | tPostgresqlOutputBulk, tPostgresqlBulkExec, tPostgresqlOutputBulkExec | `COPY table FROM 'file'` (server path) or `COPY ... FROM STDIN` via CopyManager when `Use COPY FROM STDIN`? (unverified: Studio uses server-side COPY by default, the file must be on the DB host or shared) | Copy mode: Table / Query? (unverified), Row separator, Field separator, Null string, File type CSV/Text, Enclosure |
+| PostgreSQL | tPostgresqlOutputBulk, tPostgresqlBulkExec, tPostgresqlOutputBulkExec | `COPY table FROM 'file'` executed server-side (file must be readable by the DB host; recent versions can stream via JDBC CopyManager, unverified) | Row separator, Field separator, Null string, File type CSV/Text, Enclosure |
 | Oracle | tOracleOutputBulk, tOracleBulkExec, tOracleOutputBulkExec | SQL*Loader (`sqlldr`) invoked locally; Studio writes a `.ctl` control file | Action on data: Insert / Append / Replace / Truncate; `Use existing control file`, Control file path, Field separator, Specify .ctl file's INTO TABLE clause manually, Record format (Fixed/Delimited), Direct Path; requires Oracle client with sqlldr in PATH; NLS_LANG affects encoding |
-| MSSQL | tMSSqlOutputBulk, tMSSqlBulkExec, tMSSqlOutputBulkExec | `BULK INSERT` (file must be visible to the SQL Server service) or `bcp` utility (`Use bcp`? unverified label) | Action on table, Action on data Insert/Bulk insert, Field terminator, Row terminator, First row, Code page, Keep identity, Check constraints, Fire triggers, Batch size |
+| MSSQL | tMSSqlOutputBulk, tMSSqlBulkExec, tMSSqlOutputBulkExec | `BULK INSERT` (file must be visible to the SQL Server service) or `bcp` utility (`Use bcp` label unverified) | Action on table, Action on data Insert/Bulk insert, Field terminator, Row terminator, First row, Code page, Keep identity, Check constraints, Fire triggers, Batch size |
 | Snowflake | tSnowflakeOutputBulk, tSnowflakeBulkExec, tSnowflakeOutputBulkExec | file -> stage (`PUT` to internal stage, or external S3/Azure stage) -> `COPY INTO` | Storage: Internal / S3 / Azure / GCS; Stage folder; Table Action; Output Action Insert/Update/Upsert/Delete (merge after copy via temp table); Compress by gzip; Use custom Snowflake field delimiter/Line separator; Purge after load; Copy command options (`ON_ERROR`, `FORCE`, `PURGE`) |
 | Redshift | tRedshiftOutputBulk, tRedshiftBulkExec, tRedshiftOutputBulkExec, tRedshiftUnload | `COPY table FROM 's3://...'` with IAM role or access key/secret; `UNLOAD` to S3 | S3 bucket/key, Access Key/Secret Key or `Use IAM role` (Role ARN), Data file type Delimited/CSV/JSON/AVRO/Fixed width, Compressed (gzip/lzop/bzip2), Encrypt, Date format/Time format, Fill missing fields, Accept any date, Ignore blank lines, Load region, Truncate columns, Remove quotes, Round decimal; UNLOAD: Parallel, Allow overwrite, Add quotes, Escape, Delimiter, Max file size |
 | Teradata | tTeradataFastLoad, tTeradataMultiLoad, tTeradataTPump, tTeradataTPTExec, tTeradataTPTUtility, tTeradataFastExport | invoke Teradata utilities installed locally (`fastload`, `mload`, `tpump`, `tbuild`, `fexp`) with generated scripts | Execution file path, Script generated/`Use existing script`, Load file, Error table, Log table, Work table, Checkpoint, Sessions, Max errors (TPT) |
 | Vertica | tVerticaOutputBulk, tVerticaBulkExec, tVerticaOutputBulkExec | `COPY ... FROM LOCAL` / `FROM STDIN` | Exception file, Rejected data file, Direct/Auto/Trickle load method, Enforce length, Abort on error, Skip rows |
 | Greenplum | tGreenplumGPLoad, tGreenplumOutputBulk, tGreenplumBulkExec | `gpload` utility (YAML control file generated) or `COPY` | gpload path, Port range, Error table, Local hostname, Insert/Update/Merge, Match columns, Update columns, Encoding, Log errors |
 | Netezza | tNetezzaBulkExec, tNetezzaNzLoad, tNetezzaOutputBulk | External table `CREATE EXTERNAL TABLE ... USING (...)` then INSERT SELECT, or `nzload` | Delimiter, Escape char, Date style/Date delim, Max errors, Ctrl chars, Null value, Fill record, Log/Bad dir |
-| DB2 | tDB2BulkExec (LOAD/IMPORT via `db2` CLP? unverified), tDB2OutputBulk | `LOAD FROM ... OF DEL` | DB2 client required locally |
+| DB2 | tDB2BulkExec (LOAD via db2 CLP, unverified), tDB2OutputBulk | `LOAD FROM ... OF DEL` | DB2 client required locally |
 | Sybase IQ | tSybaseIQOutputBulkExec, tSybaseIQBulkExec | `LOAD TABLE` | |
 | Informix | tInformixOutputBulkExec, tInformixBulkExec | `dbload` / `LOAD FROM` (unverified) | |
 | Azure Synapse | tAzureSynapseBulkExec | file in Azure Blob/ADLS -> `COPY INTO` / PolyBase external table | Storage account, Container, Credential (Account key / SAS / Managed identity), File format, Identity insert (unverified list) |
@@ -264,8 +264,8 @@ exist or be created via `Action on table` (None / Create / Create if not exists 
 | Type 2 fields | change -> close current row and insert a new version. Versioning options: `start date` (column; creation = input field or job start / execution date), `end date` (column; null or a fixed date `9999-12-31` for current row, label "Set end date to" unverified), `version` (Integer column, increments), `active` (Boolean/String flag `true`/`1`) | Start/end are Date columns in the dimension schema; `L1/L2/L3` labels in older docs correspond to the three optional type-2 attributes start/end + version + active |
 | Type 3 fields | keep current value and one previous value: `current value` column + `previous value` column | |
 
-- Output schema of tDBSCD = dimension table schema (incl. surrogate key and SCD technical columns); use
-  `Sync columns`? No: the schema is defined by the SCD editor; edit the schema before opening the editor.
+- Output schema of tDBSCD = dimension table schema (incl. surrogate key and SCD technical columns); the
+  schema is defined by the SCD editor (not by Sync columns); set the schema before opening the editor.
 - Reject link (unverified availability per DB) carries input rows whose source key is null.
 - SCDELT additional settings: `Source table`, `Target table` (unverified exact labels), the SQL is a
   sequence of INSERT ... SELECT / UPDATE statements; Type 3 is not supported by SCDELT (unverified).
@@ -309,8 +309,7 @@ Per DB there is a trio tELT<Db>Input / tELT<Db>Map / tELT<Db>Output (generic `tE
   table (the link name IS the table alias used in SQL; rename the link to match `Different table
   name` / alias).
 - tELTOutput: `Action on data` Insert / Update / Delete / Merge (DB-dependent), `Default Table
-  Name`, `Use different table name` + `Table name`, `Use different table alias`? (alias is set on
-  the tELTMap output table), `Action on table` (Create/Drop...), `Use WHERE conditions table`.
+  Name`, `Use different table name` + `Table name`, `Use different table alias` + `Table alias` (unverified: alias may be set on the tELTMap output table instead), `Action on table` (Create/Drop...), `Use WHERE conditions table`.
 - tELTMap: `Use an existing connection`, `Style` of join (INNER/LEFT OUTER/...) per table, `Add
   alias` (table alias), `Generated SQL Select query` tab shows the SQL. Expression details in
   tmap-expressions.md.
@@ -321,14 +320,14 @@ Per DB there is a trio tELT<Db>Input / tELT<Db>Map / tELT<Db>Output (generic `tE
 ### 2.1 Delimited / positional / regex / raw
 | Component | Purpose | Key Basic settings | Key Advanced settings | globalMap | Notes |
 |---|---|---|---|---|---|
-| tFileInputDelimited | read CSV/TSV | File name/Stream (String path or `(java.io.InputStream)globalMap.get(...)`), Row Separator (`"\n"`), Field Separator (`";"`), `CSV options` (enables Escape char `"\\"`/`"\""` and Text enclosure `"\""`), Header (rows to skip, 1 = header line), Footer, Limit, Skip empty rows, Uncompress as zip file, Die on error | Advanced separator (for numbers): Thousands separator / Decimal separator; Extract lines at random (+ Number of lines); Trim all columns / Check column to trim; Check each row structure against schema; Check date; Split row before field; Permit hexadecimal (0xNNN) or octal (0NNN) for numeric types; Encoding (ISO-8859-15 / UTF-8 / Custom); Enable parallel execution (unverified) | NB_LINE, ERROR_MESSAGE | Reject link (Die on error off): row + errorCode + errorMessage; type-conversion errors (bad date/number) go to reject, structural errors need Check each row structure. CSV options required for quoted fields containing separators or newlines; without it field separator may be a regex-like multi-char string, with it a single char |
-| tFileOutputDelimited | write CSV | File Name, Row Separator, Field Separator, Append, Include Header, Compress as zip file, CSV options (Escape char, Text enclosure), Encoding? (Advanced) | Advanced separator (for numbers); CSV options; Create directory if not exists (default on); Split output in several files + Rows in each output file; Custom the flush buffer size + Row number; Output in row mode (write line by line, needed for mixed Append writers); Encoding; Don't generate empty file; Throw an error if the file already exist; Use byte length as the cardinality (positional-style padding counts bytes, unverified placement); Row Separator (Advanced on 7.x) | NB_LINE, FILE_NAME (unverified on older versions) | Header is written only when the file is created/overwritten, not on Append to existing file (Include header + Append on existing non-empty file skips header since 6.x); Split names files `name_1.csv`, `name_2.csv` |
+| tFileInputDelimited | read CSV/TSV | File name/Stream (String path or `(java.io.InputStream)globalMap.get(...)`), Row Separator (`"\n"`), Field Separator (`";"`), `CSV options` (enables Escape char `"\\"`/`"\""` and Text enclosure `"\""`), Header (rows to skip, 1 = header line), Footer, Limit, Skip empty rows, Uncompress as zip file, Die on error | Advanced separator (for numbers): Thousands separator / Decimal separator; Extract lines at random (+ Number of lines); Trim all columns / Check column to trim; Check each row structure against schema; Check date; Split row before field; Permit hexadecimal (0xNNN) or octal (0NNN) for numeric types; Encoding (ISO-8859-15 / UTF-8 / Custom); Enable parallel execution (Enterprise) | NB_LINE, ERROR_MESSAGE | Reject link (Die on error off): row + errorCode + errorMessage; type-conversion errors (bad date/number) go to reject, structural errors need Check each row structure. CSV options required for quoted fields containing separators or newlines; without it field separator may be a regex-like multi-char string, with it a single char |
+| tFileOutputDelimited | write CSV | File Name, Row Separator, Field Separator, Append, Include Header, Compress as zip file, CSV options (Escape char, Text enclosure), Encoding (Advanced) | Advanced separator (for numbers); CSV options; Create directory if not exists (default on); Split output in several files + Rows in each output file; Custom the flush buffer size + Row number; Output in row mode (write line by line, needed for mixed Append writers); Encoding; Don't generate empty file; Throw an error if the file already exist; Use byte length as the cardinality (positional-style padding counts bytes, unverified placement); Row Separator (Advanced on 7.x) | NB_LINE, FILE_NAME (unverified on older versions) | Header is written only when the file is created/overwritten, not on Append to existing file (Include header + Append on existing non-empty file skips header since 6.x); Split names files `name_1.csv`, `name_2.csv` |
 | tFileInputPositional | fixed-width read | File name, Row separator, Pattern `"10,20,15,*"` (column widths, `*` = rest), Header/Footer/Limit, Skip empty rows, Die on error, Uncompress as zip | Customize (per-column: Column / Size / Alignment / Padding char), Advanced separator, Trim all columns, Check each row structure, Permit hexadecimal, Encoding | NB_LINE, ERROR_MESSAGE | Widths are in characters; multi-byte encodings may need byte-based option |
 | tFileOutputPositional | fixed-width write | File Name, Row separator, Formats table (Column, Size, Padding char, Alignment Left/Right, Keep), Use byte length as the cardinality, Append, Include header | Create directory, Custom flush buffer, Encoding, Don't generate empty file, Throw error if exists | NB_LINE | Values longer than Size are truncated silently unless Keep is checked (unverified semantics of Keep) |
-| tFileInputRegex | parse lines with a regex | File name, Row separator, Regex `"^(\\d+);(\\w+)$"` (one capture group per schema column), Header/Footer/Limit, Skip empty rows, Die on error | Encoding, Trim | NB_LINE | Non-matching lines dropped (or to reject? no reject link, unverified) |
+| tFileInputRegex | parse lines with a regex | File name, Row separator, Regex `"^(\\d+);(\\w+)$"` (one capture group per schema column), Header/Footer/Limit, Skip empty rows, Die on error | Encoding, Trim | NB_LINE | Non-matching lines are dropped silently (no reject link, unverified) |
 | tFileInputFullRow | each line as one String column `line` | File name, Row separator, Header, Footer, Limit, Skip empty rows, Die on error | Encoding | NB_LINE | Feed tExtractDelimitedFields / tExtractRegexFields |
 | tFileInputRaw | whole file into one column `content` (String) or byte[] | Filename, Read the file as a string / as bytes, Encoding | | NB_LINE (1) | pairs with tExtractJSONFields/tExtractXMLField on `content` |
-| tFileOutputRaw | write one column value to a file | Filename, Mode: `Write a string`/`Write bytes`?, Append (unverified label), Create directory | | NB_LINE | |
+| tFileOutputRaw | write one column value to a file | Filename, Mode: Write a string / Write bytes, Append (labels unverified), Create directory | | NB_LINE | |
 | tFileInputMSDelimited | multi-schema delimited (record type column) | File name, Row/Field separator, Multi Schema Editor (record-type cardinality, parent/child schemas) | | NB_LINE | one output link per schema |
 | tFileInputMSPositional | multi-schema positional | Multi Schema Editor with patterns per record type | | NB_LINE | |
 | tFileOutputMSDelimited | multi-schema delimited write | Schemas table (one per input link), Use Multi Field Separators | | NB_LINE | |
@@ -346,12 +345,12 @@ actually normalizes CRLF in most versions; keep `"\n"`).
 | tFileInputXML | read XML by XPath | File name/Stream, Loop XPath query (`"/root/order"`), Mapping table: Column / XPath query (relative to loop, `"@id"`, `"customer/name"`, `"."`) / Get Nodes (return the XML fragment as String instead of text value), Limit, Die on error; Advanced: Ignore DTD file, Advanced separator, Ignore the namespaces, Generation mode: Fast with low memory consumption (SAX) / Slow and memory-consuming (Dom4j) / Xerces (streaming with namespaces, 7.x+), Validate date, Encoding | NB_LINE, ERROR_MESSAGE | SAX mode: no namespaces, Get Nodes limited, XPath functions unsupported, `..` parent axis unsupported; use Dom4j for small files, Xerces for large namespaced files |
 | tFileInputMSXML | multi-schema XML (several loop elements -> several outputs) | Root XPath query, Outputs table (Schema, XPath loop expression), Mapping per output | NB_LINE | Dom4j only |
 | tExtractXMLField | parse XML held in a String/Document column of the flow | XML field (column), Loop XPath query, Mapping, Get Nodes, Ignore DTD, Generation mode | NB_LINE | typical after tFileInputRaw / tRESTClient / tDBInput CLOB |
-| tFileOutputXML | write flat XML (one element per row) | File name, Row tag (`"row"`), Root tags (list), Output format: Advanced (Split output per N rows), Encoding, Create directory, Compress as zip, Trim data, Remove empty element, Include header, Use schema column name/Use custom label (Advanced > Output format: Use schema column name / Set the label as attribute?) | NB_LINE | For nested XML use tAdvancedFileOutputXML |
+| tFileOutputXML | write flat XML (one element per row) | File name, Row tag (`"row"`), Root tags (list), Output format: Advanced (Split output per N rows), Encoding, Create directory, Compress as zip, Trim data, Remove empty element, Include header, Advanced > Output format: Use schema column name / Use custom label (labels unverified) | NB_LINE | For nested XML use tAdvancedFileOutputXML |
 | tAdvancedFileOutputXML | nested XML via XML tree | File name, Configure XML tree editor (drag schema columns onto tree nodes; `Set As Loop Element` on repeating node; `Set As Group Element` on parent whose children are grouped by equal values; `As attribute`/`Set a namespace`/`Set a fixed value`; Create empty element if needed), Append the source xml file, Generate document (Document type output column on `Output` schema instead of file), Advanced: Split output in several files, Create directory, Encoding, Trim data, Remove empty element, Advanced separator, Row separator, Compress as zip, Don't generate empty file | NB_LINE | Group element requires input sorted by the grouping columns |
 | tWriteXMLField | build XML into a Document/String column of the flow (same XML tree editor) | Output column, XML tree, Remove root element, Group by table | NB_LINE | combine with tFileOutputDelimited / tRESTClient |
-| tFileInputJSON | read JSON file/URL | File name/URL/Stream, Read By: JsonPath (recommended) / Xpath / JsonPath without loop, Loop Json query (8.0 label; 7.3 "Loop Jsonpath query", e.g. `"$.orders[*]"`), Mapping: Column / Json query or XPath (`"id"`, `"customer.name"`, `"items[0].sku"`), Die on error; Advanced: Encoding, Use the loop node as root (unverified), Validate date, Advanced separator | NB_LINE, ERROR_MESSAGE | XPath mode converts JSON to XML internally: field names starting with digits or containing `-`/`@` break; JsonPath uses Jayway JsonPath (`$..`, filters `[?(@.x>1)]`) |
-| tExtractJSONFields | same, from a String/Document column | JSON field, Read By, Loop Jsonpath query, Mapping (Column, Json query, Get Nodes? no), Die on error | NB_LINE | typical after tRESTClient / tHttpRequest / tDBInput JSON column |
-| tFileOutputJSON | write flat JSON | Name of data block (`"data"`, empty for bare array), Generate an array json (array of objects without wrapper), File Name, Create directory, Encoding, Compress? | NB_LINE | nested JSON: tWriteJSONField (XML-tree editor, `Set As Loop Element`, `Set As Array`? no: the tree editor drives arrays via loop element) |
+| tFileInputJSON | read JSON file/URL | File name/URL/Stream, Read By: JsonPath (recommended) / Xpath / JsonPath without loop, Loop Json query (8.0 label; 7.3 "Loop Jsonpath query", e.g. `"$.orders[*]"`), Mapping: Column / Json query or XPath (`"id"`, `"customer.name"`, `"items[0].sku"`), Die on error; Advanced: Encoding, Use the loop node as root (label unverified), Validate date, Advanced separator | NB_LINE, ERROR_MESSAGE | XPath mode converts JSON to XML internally: field names starting with digits or containing `-`/`@` break; JsonPath uses Jayway JsonPath (`$..`, filters `[?(@.x>1)]`) |
+| tExtractJSONFields | same, from a String/Document column | JSON field, Read By, Loop Jsonpath query, Mapping (Column, Json query), Die on error | NB_LINE | typical after tRESTClient / tHttpRequest / tDBInput JSON column |
+| tFileOutputJSON | write flat JSON | Name of data block (`"data"`, empty for bare array), Generate an array json (array of objects without wrapper), File Name, Create directory, Encoding | NB_LINE | nested JSON: use tWriteJSONField (tree editor; arrays come from the loop element) |
 | tWriteJSONField | build JSON into a column | Output Column, Configure JSON Tree (same editor as tAdvancedFileOutputXML; `Set As Loop Element`, `As attribute` has no meaning), Group by, Remove root node, Keep root node, Serialize: Json array/object (unverified label), `Convert empty string/null to ...` (unverified) | NB_LINE | integers/booleans are emitted as strings unless the schema column type is numeric/boolean (8.0 emits typed since R2021-xx, unverified) |
 | tXMLMap | map-based XML, tmap-expressions.md | | | |
 
@@ -361,26 +360,26 @@ Mapping with `"ns:node"` only in Dom4j/Xerces mode, or check Ignore the namespac
 ### 2.3 Excel, properties, LDIF, ARFF, EBCDIC, Avro, Parquet
 | Component | Purpose | Key settings | globalMap | Notes |
 |---|---|---|---|---|
-| tFileInputExcel | read xls/xlsx | File name/Stream, Read excel2007 file format(xlsx) (needed for .xlsx/.xlsm; enables Excel 2007+ password), Generation mode (xlsx only): Memory-consuming (User mode, 7.x) / Less memory consumed for large excel (Event mode, streaming via XSSF event API), All sheets / Sheet list (Sheet name or index, `Use Regex`), Header, Footer, Limit, Affect each sheet (header/footer), Die on error, First column / Last column (1-based), Stop reading on encountering empty rows (xls only), Advanced: Advanced separator (for numbers), Trim all columns, Encoding, Convert date column to string? (unverified), Read real value for numbers, `Don't validate the cells` (unverified), Ignore warnings? | NB_LINE, CURRENT_SHEET (Flow) | Numeric cells read into String columns come as `1.0E7`/`123.0`: use `Read real value for numbers` or BigDecimal column + pattern; Date cells need Date column; xls = Apache POI HSSF (max 65536 rows), xlsx = XSSF; Event mode cannot read formulas' cached results in some versions |
+| tFileInputExcel | read xls/xlsx | File name/Stream, Read excel2007 file format(xlsx) (needed for .xlsx/.xlsm; enables Excel 2007+ password), Generation mode (xlsx only): Memory-consuming (User mode, 7.x) / Less memory consumed for large excel (Event mode, streaming via XSSF event API), All sheets / Sheet list (Sheet name or index, `Use Regex`), Header, Footer, Limit, Affect each sheet (header/footer), Die on error, First column / Last column (1-based), Stop reading on encountering empty rows (xls only), Advanced: Advanced separator (for numbers), Trim all columns, Encoding, Read real value for numbers, Don't validate the cells (unverified), Ignore warnings (unverified) | NB_LINE, CURRENT_SHEET (Flow) | Numeric cells read into String columns come as `1.0E7`/`123.0`: use `Read real value for numbers` or BigDecimal column + pattern; Date cells need Date column; xls = Apache POI HSSF (max 65536 rows), xlsx = XSSF; Event mode cannot read formulas' cached results in some versions |
 | tFileOutputExcel | write xls/xlsx | File Name, Write excel2007 file format(xlsx), Sheet name, Include header, Append existing file / Append existing sheet, Is absolute Y pos / First cell X,Y, Keep existing cell format, Font, Define all columns auto size, Create directory, Password protection (xlsx), Use streaming mode (SXSSF, 7.3+ unverified label) | NB_LINE | Dates written as Excel dates when column is Date; `Keep existing cell format` + Append for templates |
 | tFileInputProperties | read .properties / .ini | File Format: .properties / .ini (+ Section Name), File name, Encoding | NB_LINE | output schema fixed: `key`, `value` (String) |
-| tFileOutputProperties | write .properties/.ini | File format, File name, Append? (unverified), Encoding | NB_LINE | input schema must be key/value |
+| tFileOutputProperties | write .properties/.ini | File format, File name, Encoding | NB_LINE | input schema must be key/value |
 | tFileInputLDIF | read LDIF | File name, Schema with LDAP attribute names, Value separator (for multi-valued attrs), Die on error | NB_LINE | base64 values decoded automatically |
 | tFileOutputLDIF | write LDIF | File name, Change type: Add / Modify / Delete / Modrdn / Content (unverified set), Wrap (line wrap 78), Encoding, Append, Multi-values separator | NB_LINE | `dn` column required |
 | tFileInputARFF / tFileOutputARFF | Weka ARFF | File name, Row separator, Header | NB_LINE | rarely used |
 | tFileInputEBCDIC | mainframe EBCDIC with COBOL copybook | Copybook (file path or Repository Metadata > File EBCDIC), Data file, Record format (fixed/variable, RDW), Code page (`"cp037"`, `"cp1047"`, `"cp500"`), multi-schema outputs per copybook record | NB_LINE | There is no separate `tCopybook` component: the copybook is parsed by the File EBCDIC metadata wizard (Enterprise) |
 | tFileInputAvro / tFileOutputAvro | Avro container files (Standard, 7.3+ in Standard palette; earlier Big Data only) | Folder/File, Compression (none/deflate/snappy), schema inferred by wizard | NB_LINE | Logical types (decimal, timestamp) map to BigDecimal/Date only in newer versions (unverified) |
-| tFileInputParquet / tFileOutputParquet | Parquet files in Standard Jobs (8.0; local filesystem or S3/HDFS via tS3Configuration etc.) | Folder/File, Compression (uncompressed/gzip/snappy), `Merge result to single file` (output), Use Hadoop configuration? | NB_LINE | Pulls Hadoop client jars (large module download on first use); timestamp INT96 vs TIMESTAMP_MILLIS compatibility issues with Spark-written files |
+| tFileInputParquet / tFileOutputParquet | Parquet files in Standard Jobs (8.0; local filesystem or S3/HDFS via tS3Configuration etc.) | Folder/File, Compression (uncompressed/gzip/snappy), `Merge result to single file` (output), Use Hadoop configuration (unverified) | NB_LINE | Pulls Hadoop client jars (large module download on first use); timestamp INT96 vs TIMESTAMP_MILLIS compatibility issues with Spark-written files |
 
 ### 2.4 File management
 | Component | Purpose | Key settings | globalMap | Notes |
 |---|---|---|---|---|
 | tFileList | iterate files/dirs | Directory, FileList Type: Files / Directories / Both, Include subdirectories, Case Sensitive: Yes/No, Generate error if no file found, Use Glob Expressions as Filemask (default on; off = Java regex), Files (Filemask table: `"*.csv"`, `"data_??.txt"`), Order by: By default / By file name / By file size / By modified date, Order action: ASC / DESC; Advanced: Use Exclude Filemask, Format file path to slash(/) style | CURRENT_FILE (name with ext), CURRENT_FILEPATH (full path), CURRENT_FILEDIRECTORY, CURRENT_FILEEXTENSION, NB_FILE (After) | All CURRENT_* are Flow variables valid inside the Iterate; connect `tFileList --Iterate--> tFileInputDelimited` with File name `((String)globalMap.get("tFileList_1_CURRENT_FILEPATH"))`. Order action is a radio, cannot be context-driven |
 | tFileExist | test existence | File name | EXISTS (Boolean, After), FILENAME | use `If` trigger: `((Boolean)globalMap.get("tFileExist_1_EXISTS"))` |
-| tFileCopy | copy/move/rename | File Name, Destination directory, Rename (+ Destination filename), Remove source file (= move), Replace existing file, Create the directory if it doesn't exist, Copy a directory (+ Include subdirectories? unverified) | DESTINATION_FILEPATH, DESTINATION_FILE, SOURCE_FILEPATH? (unverified) | there is no tFileRename component: use tFileCopy + Rename, or tSystem `mv` |
-| tFileDelete | delete file/dir | File Name, Delete directory (+ Fail on error?), Delete file | DELETE_PATH, CURRENT_STATUS (`"File deleted."`), ERROR_MESSAGE? | silent when file missing unless Fail on error (unverified) |
-| tFileArchive | zip/gzip/tar | Directory (source), Archive file, Compress level (Best/Normal/Fast), Encrypt files (zip password), All files / Files filemask, Subdirectories, Format: ZIP / GZIP / TAR? (7.x adds GZIP/TAR), Overwrite existing | ARCHIVE_FILEPATH, ARCHIVE_FILE? | gzip of a single file; zip of directory |
-| tFileUnarchive | extract | Archive file, Extraction Directory, Use the archive name as root directory, Need password, Extract files masks? | UNARCHIVE_PATH? (unverified) | supports zip, gz, tar, tgz |
+| tFileCopy | copy/move/rename | File Name, Destination directory, Rename (+ Destination filename), Remove source file (= move), Replace existing file, Create the directory if it doesn't exist, Copy a directory | DESTINATION_FILEPATH, DESTINATION_FILE (SOURCE_FILEPATH unverified) | there is no tFileRename component: use tFileCopy + Rename, or tSystem `mv` |
+| tFileDelete | delete file/dir | File Name, Delete directory, Delete file, Fail on error (unverified) | DELETE_PATH, CURRENT_STATUS (`"File deleted."`) | silent when file missing unless Fail on error (unverified) |
+| tFileArchive | zip/gzip/tar | Directory (source), Archive file, Compress level (Best/Normal/Fast), Encrypt files (zip password), All files / Files filemask, Subdirectories, Format: ZIP / GZIP / TAR (7.x+), Overwrite existing | ARCHIVE_FILEPATH, ARCHIVE_FILE (unverified) | gzip of a single file; zip of directory |
+| tFileUnarchive | extract | Archive file, Extraction Directory, Use the archive name as root directory, Need password | UNARCHIVE_PATH (unverified) | supports zip, gz, tar, tgz |
 | tFileCompare | byte compare two files | File to compare, Reference file, If differ output file, Print to console | DIFFERENCE (Boolean), MESSAGE | output schema fixed (differ flag) |
 | tFileProperties | metadata of one file | File | emits one row: abs_path, dirname, basename, mode_string, size, mtime, mtime_string | NB_LINE | for timestamps/sizes |
 | tFileRowCount | count lines | File Name, Row separator, Ignore empty rows, Encoding | COUNT (Integer) | cheap pre-check before processing |
@@ -405,3 +404,257 @@ Mapping with `"ns:node"` only in Dom4j/Xerces mode, or check Ignore the namespac
 - Repository metadata (Metadata > File delimited wizard) stores the same attributes; a component
   with Property Type = Repository locks these fields and shows a "Repository" badge; `Guess` in the
   wizard infers types from sample rows (usually String + a few Integer) and must be corrected manually.
+
+## 3. Processing family (non-map)
+| Component | Purpose | Key settings | globalMap | Notes |
+|---|---|---|---|---|
+| tAggregateRow | GROUP BY in memory | Group by table (Output column / Input column position), Operations table (Output column / Function / Input column position / Ignore null values): count, min, max, avg, sum, first, last, list, list(objects), count(distinct), standard deviation (`std dev`); Advanced: Delimiter(only for list operation) (default `","`), Use financial precision, lose performance (BigDecimal math instead of double), Check type overflow (error on Integer overflow instead of wrap), Check ULP (unit in last place precision check for float/double) | NB_LINE | Holds all groups in memory (HashMap); unsorted input OK. Output schema is defined by the Group by + Operations output columns; `sum` of Integer may overflow (use Long/BigDecimal). `count` ignores nothing; `count(distinct)` keeps a Set per group |
+| tAggregateSortedRow | GROUP BY on pre-sorted input, streaming | same Group by/Operations, `Input rows count` (exact total row count; mandatory, usually `((Integer)globalMap.get("tFileInputDelimited_1_NB_LINE"))` from an earlier subjob or tFileRowCount COUNT) | NB_LINE | Input MUST be sorted by the group-by columns; wrong row count => last group dropped or job hangs |
+| tSortRow | ORDER BY | Criteria table: Schema column / sort num or alpha (`alpha` / `num` / `date`) / Order asc or desc; Advanced: Sort on disk (label "Sort external on disk" in older versions, unverified) + Temp data directory path + Create temp data directory if not exist + Buffer Size of External Sort (rows, default 1000000) | NB_LINE | In-memory sort by default (holds all rows; OOM on large data). `num` on String column fails at runtime if non-numeric. Date columns use `date` or `alpha` by comparable |
+| tExternalSortRow | sort via OS `sort` command | Criteria, Sort command path, Temp dir | NB_LINE | needs external `sort` binary (Unix/Cygwin); rarely used since tSortRow disk sort |
+| tUniqRow | DISTINCT / duplicate split | Unique key table: Column / Key attribute (checkbox) / Case sensitive; Advanced: Only once each duplicated key (Duplicates output gets one row per duplicated key instead of every extra occurrence), Use of disk (+ Buffer size in memory, Directory for temp files) | NB_UNIQUES, NB_DUPLICATES | Two outputs: `Uniques` (first occurrence of each key) and `Duplicates` (later occurrences). Unsorted input OK (HashSet of keys in memory). Key of String compares with equals (trim first) |
+| tFilterRow | WHERE | Logical operator used to combine conditions: And / Or; Conditions table: Input column / Function (Empty, Length, Absolute value, Lower case, Upper case, Lower case first, Upper case first) / Operator (Equals, Not equal to, Greater than, Lower than, Greater or equal to, Lower or equal to, Matches (regex) ...) / Value (Java expression, `"ACTIVE"`, `42`); Use advanced mode: free Java boolean expression `input_row.age > 18 && input_row.name != null` (`input_row` is the fixed alias) | NB_LINE, NB_LINE_OK, NB_LINE_REJECT | Outputs `Filter` and `Reject` (reject = rows failing conditions, no errorCode columns). Null String with Equals throws NPE: use advanced mode with null check or Function "Empty" |
+| tFilterColumns | project/reorder columns | Edit schema: remove unwanted columns from the output schema (columns match by name) | NB_LINE | renaming is better done in tMap |
+| tJoin | inner/left join two flows (hash lookup) | Include lookup columns in output (+ Column mapping table), Inner join (unmatched Main rows -> Reject output), Key definition table (Input column / Lookup column; defaults to the schema Key columns) | NB_LINE, NB_LINE_REJECTED (unverified) | Lookup flow fully loaded in memory; prefer tMap for anything beyond a simple equi-join |
+| tReplace | search/replace in String columns | Simple mode (Replace table: InputColumn / Search / Replace with / Whole word / Case sensitive) or Advanced mode (Regex / Replace with `$1` back-references); `Use advanced mode`: Input column / Pattern / Replace with | NB_LINE | Operates only on String columns; multiple rules apply in order |
+| tReplaceList | replace using a lookup list | Lookup link provides (search, replace) pairs; Lookup search column / Lookup replace column; Columns to replace table (Column / Whole word / Case sensitive) | NB_LINE | dictionary-driven cleansing |
+| tConvertType | change column types by name | Auto Cast (converts each input column to the output column type of the same name), Die on error, Set empty values to Null before converting (String "" -> null instead of NumberFormatException); manual mode table (Output column / Input column) | NB_LINE | Output schema holds the target types; Reject link available when Die on error is unchecked (errorCode/errorMessage) |
+| tNormalize | split one delimited column into rows (UNNEST) | Column to normalize, Item separator (`";"`), Use CSV parameters (Escape char, Text enclosure), Discard the trailing empty strings, Trim resulting values | NB_LINE | other columns duplicated per item |
+| tDenormalize | opposite: aggregate rows into one delimited column (needs all rows in memory) | To denormalize table: Column / Delimiter / Merge same value (dedupe) ; group = all other columns | NB_LINE | unsorted OK |
+| tDenormalizeSortedRow | same, streaming, pre-sorted | To denormalize, Input rows count | NB_LINE | sorted by non-denormalized columns required |
+| tExtractDelimitedFields | split a String column into columns | Field to split, Field separator, CSV options (Escape char, Text enclosure), Die on error, Advanced separator, Trim, Check each row structure, Check date | NB_LINE | typical after tFileInputFullRow or a DB column holding CSV |
+| tExtractPositionalFields | split by Pattern `"5,10,*"` | Field, Customize (Column/Size/Alignment/Padding) | NB_LINE | |
+| tExtractRegexFields | split by regex capture groups | Field to split, Regex (capture groups -> schema columns in order), Die on error | NB_LINE | non-matching rows yield null output columns (behaviour unverified), route with Die on error off + reject |
+| tSplitRow | one input row -> N output rows via expression table | Columns mapping table: for each output row a set of expressions per output column | NB_LINE | manual unpivot |
+| tSampleRow | keep rows by position range | Range `"1..10,20,30..40"` (1-based) | NB_LINE | |
+| tReplicate | duplicate a flow to several outputs | none (just connect several Main outputs) | | all outputs share the same schema; order of execution is interleaved per row |
+| tUnite | UNION ALL of several Main inputs | none | NB_LINE | all inputs need identical schema; inputs are consumed sequentially (first link fully, then second) |
+| tWriteDynamicFields | pack several columns into one Dynamic column | Output column (Dynamic); all other input columns are packed | NB_LINE | |
+| tExtractDynamicFields | unpack a Dynamic column into static columns | Dynamic field, Edit schema with the expected column names (matched by name, case-sensitive) | NB_LINE | missing names -> null |
+| tPivotToColumnsDelimited | pivot rows to columns written directly to a delimited file | Pivot column, Aggregation column, Aggregation function (first/last/count/min/max/sum/avg), Group by, File Name, Field separator, Row separator, Encoding | NB_LINE | writes a file, not a flow; for in-flow pivot use tDenormalize or tMap |
+| tMemorizeRows | keep the last N rows of selected columns in arrays accessible in downstream tJavaRow/tMap | Row count to memorize, Columns to memorize table | per column arrays `tMemorizeRows_1_<col>` (Flow) | `((String[])globalMap.get("tMemorizeRows_1_name"))[0]` is the current row, `[1]` previous; row-to-row comparisons (running totals, change detection) |
+| tConvertType / tSchemaComplianceCheck / tIntervalMatch / tDataShuffling / tSqlRow | DQ or Spark | | | data-quality-governance.md / big-data-spark.md |
+
+Sorted-input rules: tAggregateSortedRow, tDenormalizeSortedRow and tAdvancedFileOutputXML Group
+element need input sorted on the group columns and the exact total row count; tUniqRow,
+tAggregateRow, tDenormalize, tJoin, tSortRow do not need sorted input but hold data in memory
+(tUniqRow: keys only; tAggregateRow: groups; tSortRow/tDenormalize/tJoin lookup: all rows). For
+large data use tSortRow with Sort on disk, or push the operation to the database (ELT or SQL in
+tDBInput).
+
+## 4. Data types in a component schema
+| Talend type (Edit schema `Type`) | Java type generated | Default when Nullable unchecked | Notes |
+|---|---|---|---|
+| String | java.lang.String | n/a (object) | Length informational; DB CREATE uses VARCHAR(Length), default length when empty varies (255 MySQL via mapping) |
+| Integer | int (not nullable) / java.lang.Integer (Nullable) | 0 | overflow silently wraps unless tAggregateRow Check type overflow |
+| Long | long / java.lang.Long | 0L | use for row counts, ids > 2^31 |
+| Short | short / java.lang.Short | | |
+| Byte | byte / java.lang.Byte | | |
+| Double | double / java.lang.Double | 0.0 | binary float issues for money: use BigDecimal |
+| Float | float / java.lang.Float | | |
+| BigDecimal | java.math.BigDecimal | n/a | Length = precision, Precision = scale in Talend's schema naming (Length 18 / Precision 2 => DECIMAL(18,2)) |
+| Boolean | boolean / java.lang.Boolean | false | file inputs parse `"true"`/`"false"` and `"1"`/`"0"` via `ParserUtils.parseTo_Boolean` (not Y/N) |
+| Character | char / java.lang.Character | | CHAR(1) |
+| Date | java.util.Date | n/a | Date Pattern per column; DB TIMESTAMP maps to Date (ms precision); no java.time types in schemas |
+| byte[] | byte[] | n/a | BLOB/VARBINARY/BYTEA; tFileInputRaw bytes mode |
+| Object | java.lang.Object | n/a | carrier for ResultSet (Propagate QUERY's recordset), arbitrary Java objects between tJava components, Avro records |
+| List | java.util.List | n/a | from Spark/Big Data, rarely in Standard; tMap cannot expand |
+| Document | routines.system.Document (wraps dom4j Document) | n/a | XML payload for tXMLMap, tESBConsumer, tAdvancedFileOutputXML Generate document, tWriteXMLField |
+| Dynamic | routines.system.Dynamic | n/a | one per schema, must be the last column (Enterprise); see section 5 |
+
+- `Nullable` checkbox: unchecked on Integer/Long/Double/Boolean/... generates a Java primitive; a
+  null from the source (DB NULL, empty CSV field) then raises `NullPointerException`/`NumberFormatException`
+  or is replaced by the `Default` value depending on component. Check Nullable on every column that
+  can be NULL (DB Repository schemas import nullability from the catalog; file wizards default to nullable).
+- `Default` column: Java expression used when the input is empty (delimited inputs) or when the
+  column is added via Sync columns; for String use `"\"\""` style (the field expects Java literal).
+- `Key` checkbox: used by tDBOutput Update/Delete WHERE, tUniqRow default keys, tJoin keys, tMap
+  lookup matching proposals, and `Create table` PRIMARY KEY.
+- `Length`/`Precision`: used only for DDL generation and positional/Excel formatting; Talend does not
+  truncate Strings to Length on insert (the DB will error with "Data too long").
+- `Date Pattern`: see 2.5; on DB components it is ignored for Date columns (JDBC binds Timestamp).
+- `Comment`: free text stored in the .item.
+
+DB type mapping: `<studio>/plugins/org.talend.core.runtime_<version>.jar!/mappings/mapping_<db>.xml`
+(e.g. `mapping_Mysql.xml`, `mapping_Oracle.xml`, `mapping_Postgres.xml`, `mapping_MSSQL.xml`,
+`mapping_Snowflake.xml`, `mapping_JDBC.xml` ... exact file-name casing varies by DB) with sections
+`<dbTypes>`, `<dbToTalendTypes>` and `<talendToDbTypes>` mapping each DB type to a Talend type with
+`default="true"` for the preferred one. The `Mapping` dropdown (Advanced settings of tDBInput/
+tDBOutput/tJDBC*/tCreateTable and in the Db Connection metadata wizard) chooses which file to use
+(e.g. `mapping_mysql` vs `mapping_mariadb`; for tJDBC pick the closest vendor or `mapping_jdbc`).
+Window > Preferences > Talend > Specific Settings > Metadata of TalendType lets you edit/add
+mappings in the Studio; edited files live in the workspace `.metadata` and must be re-applied after
+Studio upgrades (unverified exact preference path).
+
+## 5. Schema propagation rules and Dynamic schema
+- Each component owns an output schema; a Main link carries the upstream component's output schema
+  to the downstream input. Components whose output = input (tLogRow, tFilterRow, tReplace, tSortRow,
+  tUniqRow, tDBOutput, file outputs) show a `Sync columns` button that copies the input schema into
+  the component's schema; after any upstream schema change Studio prompts "Propagate changes?" and
+  downstream components turn with a yellow warning until synced.
+- Lookup links (into tMap/tJoin/tReplaceList/tXMLMap) carry the lookup component's own schema; they
+  are not merged with Main unless the mapping component does it.
+- Reject links: schema = input schema + `errorCode` (String) + `errorMessage` (String) appended by
+  Studio; adding these to the parent schema manually breaks the reject.
+- Repository schemas: a component with Schema = Repository shows the metadata item; `Built-In`
+  detaches a copy. Changing a Repository schema and choosing "Update all jobs" rewrites the .item
+  files of every job using it (Impact analysis in Enterprise).
+- tFixedFlowInput / tRowGenerator / tFileInput* / tDBInput are schema sources; outputs and
+  transformations consume. tUnite requires all inputs to match the tUnite schema exactly (name/type).
+- Iterate links carry no schema (only globalMap).
+
+Dynamic schema (Enterprise/Platform editions):
+- Add one column of type `Dynamic`, it must be the LAST column of the schema; static columns before
+  it are matched by name/position, everything else at runtime lands in the Dynamic column. Supported
+  by tDBInput/tDBOutput (with Use dynamic schema / Enable Mapping File for Dynamic), tFileInput/
+  OutputDelimited, tFileInputPositional, tFileInputExcel, tLogRow, tJavaRow,
+  tMap (passes through on Main; a Dynamic column cannot be expanded into lookup join keys or
+  individual expressions; only whole-column copy), tWriteDynamicFields/tExtractDynamicFields,
+  tSetDynamicSchema (define columns at runtime from a tFixedFlowInput description).
+- Runtime API (`routines.system.Dynamic` and `routines.system.DynamicMetadata`), typically in tJavaRow:
+```java
+routines.system.Dynamic dyn = input_row.dyn;              // Dynamic column named "dyn"
+int n = dyn.getColumnCount();
+for (int i = 0; i < n; i++) {
+    routines.system.DynamicMetadata m = dyn.getColumnMetadata(i);
+    String name = m.getName();          // column name
+    String dbName = m.getDbName();      // original DB column name
+    String type = m.getType();          // Talend type: "id_String", "id_Integer", "id_Date", "id_BigDecimal" ...
+    String dbType = m.getDbType();      // "VARCHAR", "NUMBER", ...
+    int length = m.getLength(); int precision = m.getPrecision();
+    String format = m.getFormat();      // date pattern
+    boolean key = m.isKey(); boolean nullable = m.isNullable();
+    Object value = dyn.getColumnValue(i);     // also getColumnValue(name)
+    dyn.setColumnValue(i, value);             // setColumnValue(name, value)
+}
+dyn.addColumn(meta); dyn.removeColumn(i); dyn.getIndex("name"); dyn.clearColumnValues(); dyn.getColumnValue("name");
+```
+  Metadata setters: `setName/setType/setDbName/
+  setDbType/setLength/setPrecision/setFormat/setKey/setNullable`. Column types in Dynamic are decided
+  by the input (DB catalog via mapping file; files default every column to String unless
+  `Enable Mapping File for Dynamic` style options).
+- tDBOutput with Dynamic: Action on table Create builds DDL from the Dynamic metadata; column
+  order = static columns then dynamic ones; there is no separate "Use dynamic schema" checkbox on most DBs, the behaviour is implicit (unverified).
+
+## 6. Database-specific notes
+| DB | Driver module / jar (Studio fetches into `<studio>/configuration/.m2` or `lib/java`) | JDBC URL pattern generated | Specific settings and remarks |
+|---|---|---|---|
+| MySQL | `mysql-connector-java-5.1.x.jar` (MySQL 5), `mysql-connector-java-8.0.x.jar` (MySQL 8; driver class `com.mysql.cj.jdbc.Driver`), `mariadb-java-client` for MariaDB | `jdbc:mysql://host:port/db?<additional params>` | DB Version MySQL 5 / MySQL 8 / MariaDB 10; Enable stream (Input: `useCursorFetch`-style streaming, `setFetchSize(Integer.MIN_VALUE)`); Extend Insert; Use duplicate key update; batch requires `rewriteBatchedStatements=true` for real multi-row inserts; `zeroDateTimeBehavior=convertToNull`, `serverTimezone=UTC`, `allowPublicKeyRetrieval=true` common params; LOAD DATA LOCAL needs `allowLoadLocalInfile=true` |
+| Amazon Aurora | MySQL / Postgres driver | `jdbc:mysql://cluster-endpoint:3306/db` | choose Aurora MySQL vs Aurora Postgres via DB Version / separate component families |
+| Oracle | `ojdbc8.jar` / `ojdbc10/11` (DB Version 12c-21c), OCI needs client; wallet needs `oraclepki`, `osdt_*` jars | SID `jdbc:oracle:thin:@host:1521:ORCL`; Service Name `jdbc:oracle:thin:@//host:1521/service`; Custom URL for RAC/TNS | Connection Type: Oracle SID / Oracle Service Name / Oracle OCI / Oracle Custom / Oracle RAC / WALLET; Schema must be UPPERCASE; Oracle DATE has time: Talend maps DATE -> Date (java.util.Date) keeping time since 6.x but mapping file may propose `id_Date` with pattern; tOracleInput `Convert Timestamp to Date` (unverified label); tOracleSP RECORDSET param for `SYS_REFCURSOR`; tOracleOutput `Use Hint Options`, `Convert columns and table to uppercase`; NLS: set `-Duser.timezone` / `oracle.jdbc.timezoneAsRegion=false`; `Insert or update` does INSERT then UPDATE (no MERGE) |
+| PostgreSQL | `postgresql-42.x.jar` | `jdbc:postgresql://host:5432/db?ssl=true` | Use cursor (+ Fetch size): requires Auto Commit off (Studio handles it when not using existing connection); `Support null in WHERE`; Schema default `"public"`; `Use batch mode` + Reject not available together; `stringtype=unspecified` param to let Postgres cast String columns to enum/json/uuid; Postgres `COPY` bulk requires file on server or `Use STDIN` (unverified) |
+| Microsoft SQL Server | JDBC Provider: Open source JTDS (`jtds-1.3.1.jar`, URL `jdbc:jtds:sqlserver://host:1433/db;instance=X;domain=D`) or Microsoft (`mssql-jdbc-x.jre8/11.jar`, URL `jdbc:sqlserver://host:1433;databaseName=db;encrypt=true;trustServerCertificate=true`) | | DB Version SQL Server 2012-2022; Microsoft driver needed for `Always Encrypted`, Azure AD auth (`authentication=ActiveDirectoryPassword`), `datetime2`/`datetimeoffset` precision; JTDS for NTLM/Windows auth with `ntlmauth.dll`; Identity insert; `sendStringParametersAsUnicode=false` improves varchar index use; Azure SQL via MSSQL component with `hostNameInCertificate=*.database.windows.net` |
+| Azure Synapse | Microsoft mssql-jdbc | `jdbc:sqlserver://<ws>.sql.azuresynapse.net:1433;database=pool` | tAzureSynapseBulkExec via Azure Blob/ADLS Gen2 + COPY INTO; dedicated SQL pool has no IDENTITY insert / limited MERGE (older versions) |
+| Snowflake | `snowflake-jdbc-3.x.jar` | `jdbc:snowflake://<account>.<region>.snowflakecomputing.com/?warehouse=W&db=D&schema=S&role=R` | Account (`xy12345` or `xy12345.eu-west-1`, or org-account), Region (dropdown or custom; omitted for newer account URLs), Warehouse, Database, Schema, Role (Advanced, 8.0), Authentication: Basic / Key Pair (Private key file + password) / OAuth / SSO (externalbrowser); Login Timeout; tSnowflakeOutput: `Table Action` (None/Create/Create if not exists/Drop and create/Drop if exists and create/Clear/Truncate), `Output Action` Insert / Update / Upsert / Delete (MERGE through temp table), `Use custom DB Type` (per-column Snowflake type for Create), `Convert empty strings to null` (label unverified; Snowflake treats `''` as empty not null), `Use schema date pattern for Date type` (Advanced, unverified), `Custom Snowflake field delimiter`, `Allow Snowflake to convert columns and tables to uppercase` (unquoted identifiers are uppercased; unchecked = quoted case-sensitive identifiers that will not match `select * from mytable`) ; tSnowflakeRow/tSnowflakeCommit/tSnowflakeRollback/tSnowflakeClose exist; writes go through internal stage + COPY (fast) not row inserts |
+| Amazon Redshift | `redshift-jdbc42-x.jar` (8.0) / postgres driver (older) | `jdbc:redshift://endpoint:5439/db` | tRedshiftOutput row inserts are slow: always use tRedshiftOutputBulkExec (S3 + COPY); tRedshiftUnload (UNLOAD to S3, Parallel/Allow overwrite/Delimiter/Escape/Add quotes/Null as); `Use IAM role`/Access key; SSL `ssl=true&sslfactory=com.amazon.redshift.ssl.NonValidatingFactory` |
+| Teradata | `terajdbc4.jar` (+ `tdgssconfig.jar` < 16.20) | `jdbc:teradata://host/DATABASE=db,CHARSET=UTF8,TMODE=ANSI` | tTeradataTPTExec (TPT `tbuild`, operators Load/Update/Stream, `Script generated/Use existing script`, Max error rows, Checkpoint interval), tTeradataFastLoad / tTeradataMultiLoad / tTeradataTPump / tTeradataFastExport invoke the installed utilities (`fastload`, `mload`, `tpump`, `fexp`); tTeradataOutput `Action on data` includes `Insert or update` implemented with MERGE (unverified); tTeradataSCD/SCDELT and tTeradataCDCOutput exist; Query band via Additional params `QUERYBAND=...` |
+| DB2 | `db2jcc4.jar` (+ `db2jcc_license_cu.jar`) | `jdbc:db2://host:50000/db` | Schema mandatory (uppercase); tDB2SCD, tDB2CDC exist; `Use batch mode` ok; LOAD requires DB2 client; `currentSchema` param |
+| Vertica | `vertica-jdbc-x.jar` | `jdbc:vertica://host:5433/db` | DB Version Vertica 9-12; tVerticaBulkExec COPY with Exception file / Rejected data; `Direct` load method for large loads |
+| Greenplum | postgres driver | `jdbc:postgresql://host:5432/db` | tGreenplumGPLoad (needs `gpload` installed, generates YAML; Insert/Update/Merge, Match columns, Error table); plain tGreenplumOutput row inserts are slow |
+| Netezza | `nzjdbc.jar` (not in Maven: install manually via Modules view) | `jdbc:netezza://host:5480/db` | tNetezzaBulkExec external table; tNetezzaNzLoad (`nzload` binary); NPS case: identifiers uppercase by default |
+| SAP HANA | `ngdbc.jar` (manual install) | `jdbc:sap://host:30015/?currentschema=S` | tSAPHana* family (Connection/Input/Output/Row/Commit/Close/BulkExec via IMPORT FROM CSV on server); column-store tables created via `Action on table` with COLUMN TABLE DDL (unverified) |
+| Hive / Impala / Databricks / Delta Lake / BigQuery / Spanner / CockroachDB | see big-data-spark.md and connectors-catalog.md | | tBigQuery* is NOT in the tDB Database dropdown in 7.x (own family); Databricks via tDBConnection Database = Databricks in 8.0 |
+| Sybase | `jconn4.jar` (ASE), Sybase IQ via same or jTDS `jdbc:jtds:sybase://` | `jdbc:sybase:Tds:host:5000/db` | DB Version ASE 15/16, IQ 15/16; tSybaseIQ* bulk (`LOAD TABLE`); tSybaseSCD, tSybaseCDC exist |
+| Informix | `ifxjdbc.jar` | `jdbc:informix-sqli://host:1526/db:INFORMIXSERVER=srv` | `Server` field mandatory; DELIMIDENT param for quoted identifiers; tInformixSCD/CDC exist |
+| AS400 (IBM i / Db2 for i) | `jt400.jar` | `jdbc:as400://host;libraries=LIB;prompt=false` | Database = library; tAS400CDC via journals (needs journaling on the physical file); `Use PreparedStatement` recommended to avoid CCSID issues; tAS400Row with `translate binary=true` param |
+| SQLite | `sqlite-jdbc-3.x.jar` | `jdbc:sqlite:/path/file.db` | Database field = file path; no server; one writer at a time (`database is locked`); types are affinities so Guess schema gives String mostly |
+| HSQLDB | `hsqldb.jar` | `jdbc:hsqldb:hsql://host/db`, `jdbc:hsqldb:file:/path`, `jdbc:hsqldb:mem:name` | Running Mode: HSQLDb Server / HSQLDb WebServer / HSQLDb In Process Persistent / HSQLDb In Memory; `DB Path`/`DB Name` for file mode; often used for unit-test jobs |
+| Access | UCanAccess (`ucanaccess.jar` + hsqldb/jackcess/commons deps) in 7.x/8.0; JDBC-ODBC bridge in <=5.x | `jdbc:ucanaccess:///path/file.accdb` | DB Version Access 2003 (.mdb) / Access 2007 (.accdb); Windows only for ODBC-era |
+| Firebird | `jaybird-x.jar` | `jdbc:firebirdsql://host:3050//path/db.fdb` | tFirebird* small family (Connection/Input/Output/Row/Commit/Rollback/Close/SP) |
+| Ingres / Actian | `iijdbc.jar`; VectorWise (`tVectorWise*`) for Actian Vector | `jdbc:ingres://host:II7/db` | tIngres* family incl. tIngresCDC and tIngresSCD; Actian Avalanche/Vector: use tVectorWise* (legacy name, 7.x) or tJDBC* with the Actian driver (8.0, unverified availability of a dedicated family) |
+| Exasol | `exajdbc.jar` | `jdbc:exa:host:8563;schema=S` | tExasol* family (Connection/Input/Output/Row/Commit/Rollback/Close/BulkExec via IMPORT); identifiers uppercase |
+| Google Cloud SQL | MySQL/Postgres/MSSQL components over public IP or Cloud SQL Auth Proxy; or tJDBC with Cloud SQL socket factory jar (`cloud-sql-connector-jdbc`) and URL `jdbc:mysql:///db?cloudSqlInstance=p:r:i&socketFactory=com.google.cloud.sql.mysql.SocketFactory` | | no dedicated component |
+| JDBC (generic) | Drivers table: add jar(s) via `Modules` dialog / Maven coordinates (`mvn:org.postgresql/postgresql/42.6.0`) ; Driver Class (`org.postgresql.Driver`); JDBC URL; User/Password; Advanced: `Mapping` dropdown (pick vendor mapping for correct type inference), `Enable Mapping File for Dynamic`, `Use cursor`, `Trim`, `Use batch mode`, `Commit every` | any | tJDBCInput/Output/Row/Connection/Commit/Rollback/Close/SP/ColumnList/TableList/SCD/SCDELT; tJDBCOutput has no `Action on table` DDL beyond Create via mapping; prefer vendor component when one exists (performance options like bulk/stream are missing in generic) |
+
+## Gotchas
+| Symptom | Cause | Fix |
+|---|---|---|
+| `tDBOutput_1_NB_LINE` equals rows received but the table has fewer rows | NB_LINE counts input rows; inserts are NB_LINE_INSERTED, rejects NB_LINE_REJECTED | Log NB_LINE_INSERTED/UPDATED/DELETED/REJECTED separately; with Use batch mode the per-action counters are still filled but rejects are not |
+| Rows missing with no error, Die on error off, batch mode on | A failing batch aborts the whole `executeBatch()`; rows cannot be routed to Reject in batch mode | Turn off Use batch mode when you need a Reject link, or load to a staging table and validate with SQL |
+| Partial load committed after a job failure | Commit every (default 10000) committed earlier batches; no transaction across components | Use tDBConnection (Auto Commit off) + Use an existing connection + tDBCommit on OnSubjobOk and tDBRollback on OnSubjobError |
+| "Commit every" grayed out | Use an existing connection is checked | Commit is controlled by tDBConnection Auto Commit / tDBCommit |
+| Batch inserts slow despite Use batch mode on MySQL | Connector/J sends one statement per row unless `rewriteBatchedStatements=true` | Add it to Additional JDBC Parameters; or use Extend Insert; Commit every should be >= Batch Size |
+| `Insert or update` is very slow | Implemented as INSERT, catch duplicate-key error, then UPDATE per row (no MERGE except Snowflake/Teradata); exceptions are expensive | Use `Update or insert` when most rows exist, bulk-load to staging + SQL MERGE in tDBRow, or Snowflake Upsert / MySQL Use duplicate key update |
+| Oracle DATE column loses time or comparisons off by a day | Oracle DATE mapped to Talend Date is fine, but older mapping/driver (`oracle.jdbc.V8Compatible`, ojdbc < 11) truncated to date; timezone shifts from JVM `user.timezone` | Use ojdbc8+, set `-Duser.timezone=UTC` consistently, check tOracleInput Convert Timestamp to Date / schema Date Pattern |
+| Snowflake: `SQL compilation error: Object 'MYDB.PUBLIC.mytable' does not exist` after Create | Table created with quoted lower-case identifiers (case-sensitive) because "convert to uppercase" option unchecked | Check the uppercase conversion option on tSnowflakeOutput or always quote identifiers in your SQL |
+| Snowflake: empty strings stored as `''`, not NULL | Snowflake COPY loads empty fields as empty strings | Enable the convert-empty-to-null option on tSnowflakeOutput / COPY option `EMPTY_FIELD_AS_NULL=TRUE`, or `NULLIF` in tMap |
+| tFileInputDelimited splits a quoted field containing `;` or a newline into extra rows/columns | CSV options unchecked, so quotes are not interpreted | Check CSV options, set Text enclosure `"\""` and Escape char `"\""` (RFC4180 double-quote) or `"\\"` |
+| First column of first data row has a strange prefix (`\uFEFF`) or header mismatch | UTF-8 BOM in the file | Encoding `"UTF-8"` does not strip BOM in older versions: use Header 1 to skip, or pre-process (tFileInputRaw + replace), (no "UTF-8-BOM" encoding option) or tJavaRow `.replace("\uFEFF","")` |
+| Header line appears as a data row and causes `NumberFormatException` | Header left at 0 | Set Header = 1 (number of lines to skip, not a boolean) |
+| Job still dies although Die on error is unchecked | Only data conversion errors go to Reject; schema/structure errors (wrong column count) or IO errors still throw | Check "Check each row structure against schema" to route structural errors to reject; wrap in a tRunJob or catch via OnSubjobError |
+| `Unparseable date: "2024-01-05 10:00:00"` | Date Pattern on the schema column is `"dd-MM-yyyy"` (or empty) | Match pattern to data exactly (`"yyyy-MM-dd HH:mm:ss"`); for mixed formats read as String and use `TalendDate.parseDateInUTC`/custom routine |
+| `OutOfMemoryError: Java heap space` in tSortRow / tUniqRow / tAggregateRow / tDenormalize | Whole input held in memory | tSortRow: enable Sort on disk + Buffer Size; tUniqRow: Use of disk; otherwise sort/aggregate in SQL or raise `-Xmx` in Run > Advanced settings > JVM arguments |
+| tAggregateSortedRow emits one group short or hangs | Input not sorted on group columns, or Input rows count wrong | Insert tSortRow before; feed the exact count from a previous subjob NB_LINE or tFileRowCount COUNT |
+| Update affects 0 rows for keys with NULL | Generated `WHERE col = NULL` | Check "Support null in SQL WHERE statement" (generates `IS NULL`), or filter nulls to a separate flow |
+| Lookups / joins do not match although values look identical | CHAR padding or trailing spaces/CR from the file | Trim all the String/Char columns (DB input), Trim all columns (file input), or `.trim()` in tMap |
+| tDBRow executes a SELECT but no rows reach the next component | tDBRow does not emit result rows by default | Check Advanced > Propagate QUERY's recordset into an Object column, then tParseRecordSet; or use tDBInput |
+| tDBRow: `You have an error in your SQL syntax` with several statements | MySQL rejects multi-statement unless allowed | Add `allowMultiQueries=true` to Additional JDBC Parameters (MySQL); Oracle wrap in `BEGIN ... END;`; or one tDBRow per statement |
+| Excel .xlsx read fails with OOM or "Zip bomb detected" | User/DOM mode loads whole workbook (POI); large xlsx | Use Generation mode "Less memory consumed for large excel (Event mode)"; split file; raise `-Xmx` |
+| Excel numbers like `12345.0` or `1.2345E4` in String columns | POI returns numeric cells as double | Check "Read real value for numbers" or use numeric or BigDecimal column type with correct pattern, or format in tMap |
+| Dynamic column error "the dynamic column must be the last one" / tMap lookup refuses Dynamic key | One Dynamic per schema, always last; tMap cannot join on fields inside a Dynamic column | Put Dynamic last; use tExtractDynamicFields to materialize needed columns before tMap |
+| tFileOutputDelimited with Append and Include header writes header in the middle of the file | Header is written whenever the file is new; some versions write it on every Append | Uncheck Include header on append runs; standard pattern: write header only on first iteration via `((Integer)globalMap.get("tFileList_1_NB_FILE"))`/`tFileExist` If trigger |
+| tFileList processes files in random order | Order by: By default (filesystem order) | Set Order by By file name/modified date + Order action ASC/DESC |
+| tFileList finds no files although mask is right | Filemask is a glob (`*.csv`) while Use Glob Expressions as Filemask is off (regex expected), or Case Sensitive = Yes | Toggle Use Glob Expressions, or write regex `".*\\.csv"`; set Case Sensitive No |
+| `Table 'x' doesn't exist` with Create table if not exists on a mixed-case name | DB quoting: Postgres/Oracle fold unquoted to lower/upper; Studio quotes identifiers in DDL | Use consistent case; on Oracle keep table/columns uppercase; on Postgres lowercase |
+| Postgres `Use cursor` has no effect / OOM on big SELECT | Cursor fetch needs a transaction (Auto Commit off) and no `Use an existing connection` with Auto Commit on | Set tDBConnection Auto Commit off, or omit existing connection |
+| `Integer` column NPE in tMap or tDBOutput on NULL | Nullable unchecked => primitive `int` | Check Nullable on all nullable columns (DB wizards import it; file wizards may not) |
+| tUniqRow treats `"ABC"` and `"abc"` as different / same | Case sensitive checkbox per key column | Set per requirement; also trim before |
+| Decimal values `1.234,56` parsed as 1.234 or error | Default Decimal separator `.` | Advanced separator (for numbers): Thousands `"."`, Decimal `","` |
+| SCD creates a new Type-2 version for every run even without change | A Type-2 field containing a timestamp/last-modified column, or String vs Date compare with different formats | Move volatile columns to Type 0/1; normalize before tDBSCD |
+| CDC subscriber returns no changes | Subscription for that subscriber/table not activated, events not checked, or changes already consumed by an earlier run without Keep data in CDC table | Re-check subscription in Repository CDC Foundation; verify `TCDC_` table and events; use Keep data in CDC table while testing |
+| Oracle SQL*Loader bulk fails `sqlldr: command not found` / `SP2-0...` | Bulk components call client utilities on the Job host | Install Oracle client / Teradata TTU / gpload on the JobServer host and put them in PATH; set `Use existing control file` when needed |
+
+## Sources
+https://help.qlik.com/talend/en-US/components/8.0/sqlite/tsqliteoutput
+https://help.qlik.com/talend/en-US/components/8.0/netezza/tnetezzaoutput
+https://help.qlik.com/talend/en-US/components/7.3/netezza/tnetezzaoutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/vectorwise/tvectorwiseoutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/singlestore/tsinglestoreinput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/amazon-redshift/tredshiftinput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/maxdb/tmaxdbinput
+https://help.qlik.com/talend/r/en-US/8.0/components/amazon-redshift/tredshiftrow
+https://help.qlik.com/talend/en-US/components/8.0/sqlite/tsqliterow
+https://help.qlik.com/talend/en-US/components/7.3/mysql/tmysqlrow-tfixedflowinput-tparserecordset-tlogrow-configuring-components-standard-component
+https://help.qlik.com/talend/en-US/components/7.3/javadb/tjavadboutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/oledb/toledboutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/sybase/tsybaseoutput-standard-properties
+https://community.qlik.com/t5/Talend-Studio/Using-tDBOutput-as-a-MERGE/td-p/2377889
+https://community.qlik.com/t5/Talend-Studio/How-to-use-SQL-expressions-in-tDBOutput-or-tJDBCOutput-component/td-p/2327537
+https://help.qlik.com/talend/en-US/components/8.0/scd/scd-management-methodology
+https://help.qlik.com/talend/fr-FR/components/8.0/scdelt/tjdbcscdelt
+https://help.qlik.com/talend/fr-FR/components/8.0/scdelt/tteradatascdelt
+https://help.qlik.com/talend/en-US/studio-user-guide/8.0-R2026-07/configuring-cdc-in-trigger-mode
+https://help.qlik.com/talend/en-US/studio-user-guide/7.3/step-4-subscribe-to-source-table-and-activate-subscription
+https://help.qlik.com/talend/en-US/components/7.2/change-data-capture/tmysqlcdc-tlogrow-tmap-tmysqloutput-specify-which-table-subscriber-wants-to-subscribe-to-and-then-activate-subscription-standard-component-enterprise
+https://help.qlik.com/talend/en-US/components/8.0/jdbc/tjdbcconnection
+https://help.qlik.com/talend/en-US/components/8.0/mysql/tmysqlconnection
+https://help.qlik.com/talend/en-US/components/8.0/db2/tdb2connection
+https://help.qlik.com/talend/en-US/components/7.3/jdbc/tjdbcconnection-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/elt-mysql/teltmysqloutput
+https://help.qlik.com/talend/en-US/components/7.3/elt-mysql/teltmysqloutput-standard-properties
+https://help.qlik.com/talend/en-US/data-integration-job-examples/7.3/applying-validation-rule-and-viewing-job-execution-result
+https://help.qlik.com/talend/en-US/components/7.2/mssql/tmssqloutputbulk-standard-properties
+https://community.qlik.com/t5/Talend-Studio/How-to-get-NB-LINE-in-tPostgresPlusRow/td-p/2330906
+https://community.qlik.com/t5/Talend-Studio/How-to-count-number-of-rows-affected-created-updated-by/m-p/2362336
+https://help.qlik.com/talend/en-US/components/8.0/delimited/tfileinputdelimited-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/delimited/tfileinputdelimited-standard-properties
+https://help.qlik.com/talend/en-US/job-script-reference-guide/8.0/component-specific-settings-for-tfileinputdelimited
+https://help.qlik.com/talend/en-US/components/7.2/delimited/tfileoutputdelimited-standard-properties
+https://help.qlik.com/talend/en-US/job-script-reference-guide/8.0/component-specific-settings-for-tfileoutputdelimited
+https://help.qlik.com/talend/en-US/components/8.0/ms-delimited/tfileoutputmsdelimited
+https://community.qlik.com/t5/Talend-Studio/Custom-the-flush-buffer-size-quot-on-the-tFileOutputDelimited/m-p/2295236
+https://community.qlik.com/t5/Talend-Studio/tFileOutputDelimited-quot-don-t-create-empty-file-quot-on-but/m-p/2241160
+https://help.qlik.com/talend/en-US/components/8.0/tfilelist/tfilelist
+https://help.qlik.com/talend/en-US/components/7.3/tfilelist/tfilelist-standard-properties
+https://community.qlik.com/t5/Talend-Studio/resolved-tFileList-Order-Action/m-p/2343229
+https://community.qlik.com/t5/Talend-Studio/Can-we-get-the-current-filepath-without-the-filename/m-p/2324337
+https://help.qlik.com/talend/en-US/components/7.2/xml-connectors/tfileinputxml-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/ms-xml-connectors/tfileinputmsxml
+https://help.qlik.com/talend/en-US/components/7.3/ms-xml-connectors/tfileinputmsxml-standard-properties
+https://community.qlik.com/t5/Talend-Data-Catalog/XML-iteration-is-slow/td-p/2343296
+https://help.qlik.com/talend/en-US/components/8.0/json/tfileinputjson-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/json/tfileinputjson-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/processing/textractjsonfields-tfileinputjson-tlogrow-tlogrow-configuring-components-standard-component
+https://help.qlik.com/talend/en-US/components/8.0/excel/tfileinputexcel
+https://help.qlik.com/talend/en-US/components/7.3/excel/tfileinputexcel-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/excel/tfileinputexcel-standard-properties
