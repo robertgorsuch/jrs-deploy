@@ -29,13 +29,14 @@ This is a **working demo environment**, not a starter template. Every script, sk
 |---|---|
 | `scripts/` | TIGER data loaders that build the PostGIS sample DB the demo reports query — `load_tiger_nation.bat`, `load_remaining.ps1`, etc. All use `curl` + `7z t` integrity checks with retry. |
 | `report/` | JasperReports templates (`*_jr7.jrxml` native JR7 + 6.x version), JDBC data adapter, compile/fill harnesses. `report/foodmart/` holds deployable KPI reports + `dashboard.json` manifest. |
-| `plugins/talend-etl/` | The **talend-etl Claude Code plugin** — a Talend / Qlik Talend knowledge-base skill (`SKILL.md` index over 13 deep `references/*.md`: Studio, connectors, tMap, Spark, ESB, deployment, APIs, artifact formats, DQ/MDM, versions, patterns), four stdlib Python helpers (`.item` and export inspectors, TAC MetaServlet encoder, Talend Cloud API client), three slash commands and its own [CHANGELOG](plugins/talend-etl/CHANGELOG.md). Knowledge is doc-derived and not yet verified against a live Talend install. |
 | `plugins/jasper-deploy/` | The **jasper-deploy Claude Code plugin** — the skill (49 PowerShell/Python scripts covering the full JRS lifecycle; `SKILL.md` is the lean index, detail lives in `references/`), four slash commands, and the plugin [CHANGELOG](plugins/jasper-deploy/CHANGELOG.md). |
 | `webapp/jasper-wizard/` | Self-service browser UI over the skill. Business users create, run, and deliver Jaspersoft artifacts with no JRXML or REST knowledge. |
 | `postman_collections/` | REST v2 Postman collections for manual API exploration. |
 | `output/`, `maps/`, `backups/` | Generated artifacts (PDF / GeoJSON / CSV / Leaflet HTML / JRS export zips) — not tracked; regenerate from the DB and the skill's export scripts. |
 | `RUNBOOK.md` | Full operational reference: environment, exact commands, rebuild order, and gotchas. |
 | `ONBOARDING.md` | 5-minute orientation for a new contributor. |
+
+The Talend / Qlik Talend knowledge-base skill (`talend-etl`) lives in its own marketplace repository: [robertgorsuch/jrs-etl](https://github.com/robertgorsuch/jrs-etl).
 
 ---
 
