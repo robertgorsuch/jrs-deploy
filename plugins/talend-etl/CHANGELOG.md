@@ -57,3 +57,8 @@ stdlib-only Python helpers and three slash commands.
 - `evals/results/iteration-2/`: re-run against the strengthened assertions
   after the iteration-1 fixes: skill 28/28 vs baseline 26/28, 1 vs 2 false
   claims. Two reference inconsistencies found by the grader were corrected.
+- `evals/trigger_eval.json` + `evals/results/description-opt/`: 20-query
+  trigger set and a 5-iteration description optimization run; the best
+  held-out description (precision 100%, recall 33% test) is now the SKILL.md
+  description. See that folder's README for why recall stays low in
+  headless runs.

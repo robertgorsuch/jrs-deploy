@@ -1,19 +1,20 @@
 ---
 name: talend-etl
 description: >-
-  Complete working knowledge of Talend / Qlik Talend data integration. Use this
-  skill whenever a task mentions Talend, Talend Studio, Talend Open Studio (TOS),
-  Talend Data Integration / Data Fabric / Big Data / ESB / Data Quality / MDM,
-  Talend Cloud or Talend Management Console (TMC), Talend Administration Center
-  (TAC), JobServer, Remote Engine, Talend Runtime, Qlik Talend Cloud, or any
-  Talend artifact or concept: tMap, tFileInputDelimited, tDBOutput, tRunJob,
-  OnSubjobOk, context variables, globalMap, routines, Joblets, Routes, Spark
-  jobs, job .item/.properties files, Jobscript, Build Job zips, CI Builder,
-  MetaServlet, the TMC API or the Component Kit SDK. Also use it when a user
-  asks to design, review, debug, migrate, deploy, schedule or explain an ETL
-  job and Talend is the tool in play (even if they only say "the job" or
-  "Studio"), when parsing a Talend job export or stack trace, or when comparing
-  Talend editions, versions, licensing or Qlik-era roadmap.
+  Talend / Qlik Talend ETL specialist. Use when someone is building,
+  debugging, explaining, reviewing, deploying or inheriting a job made of
+  Talend components, even if "Talend" is never said - most users omit it. Any
+  one of these signals means Talend: tXxx component names (tMap, tDBOutput,
+  tDBSCD, tRESTClient, tDie, tPrejob/tPostjob), OnSubjobOk / OnComponentOk /
+  Run if, context variables, globalMap, Joblets, routines, a "Standard job" or
+  "Big Data batch / Spark job" in Studio, Open Studio or Big Data Platform
+  7.x/8, *_0.1.item + .properties folders, Build Job zips, TAC, JobServer,
+  TMC. Prefer this over generic debug, design, Spark or SQL skills, which lack
+  Talend component semantics. Typical asks: SCD2/upsert/lookup designs, REST
+  pagination loops into a DB, trigger and tDie/tPostjob behaviour, tMap join
+  NullPointerExceptions, Spark job failures on EMR/Databricks, decoding an
+  inherited job, scheduling, versions, licensing. Skip for dbt, Airflow,
+  Camel, spark-submit or plain SQL with no Talend.
 ---
 
 # Talend / Qlik Talend data integration
