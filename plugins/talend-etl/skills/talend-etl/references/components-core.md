@@ -603,6 +603,7 @@ dyn.addColumn(meta); dyn.removeColumn(i); dyn.getIndex("name"); dyn.clearColumnV
 | SCD creates a new Type-2 version for every run even without change | A Type-2 field containing a timestamp/last-modified column, or String vs Date compare with different formats | Move volatile columns to Type 0/1; normalize before tDBSCD |
 | CDC subscriber returns no changes | Subscription for that subscriber/table not activated, events not checked, or changes already consumed by an earlier run without Keep data in CDC table | Re-check subscription in Repository CDC Foundation; verify `TCDC_` table and events; use Keep data in CDC table while testing |
 | Oracle SQL*Loader bulk fails `sqlldr: command not found` / `SP2-0...` | Bulk components call client utilities on the Job host | Install Oracle client / Teradata TTU / gpload on the JobServer host and put them in PATH; set `Use existing control file` when needed |
+| `BATCH_SIZE` / `Use Batch Size` has no visible effect | `Use Batch Size` applies to Insert, Update and Delete only; `Insert or update` / `Update or insert` run statement-by-statement (insert, catch duplicate, update) and ignore batching, as does a reject link | Load to a staging table with Insert in batches, then one MERGE / `INSERT ... ON CONFLICT` in tDBRow; or choose the single action that matches most rows |
 
 ## Sources
 https://help.qlik.com/talend/en-US/components/8.0/sqlite/tsqliteoutput

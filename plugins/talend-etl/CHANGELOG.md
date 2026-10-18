@@ -46,3 +46,11 @@ stdlib-only Python helpers and three slash commands.
 
 ### Commands
 - `/talend-etl:inspect`, `/talend-etl:review`, `/talend-etl:tmc`.
+
+### Evals
+- `skills/talend-etl/evals/evals.json`: three prompts (explain/review a job
+  item, design an incremental PostgreSQL -> Snowflake load with TMC deployment,
+  troubleshoot an exported job) with assertions.
+- `evals/results/iteration-1/`: with-skill vs without-skill answers, grading,
+  benchmark and a standalone `review.html`. Pass rates tied at 100%; the skill
+  run made 1 factual error (fixed) against 5 for the baseline. See its README.

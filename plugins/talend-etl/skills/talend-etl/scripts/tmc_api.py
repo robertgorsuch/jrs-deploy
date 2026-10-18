@@ -148,7 +148,7 @@ class Client:
             ex = self.request("GET", f"/processing/executions/{execution_id}")
             if ex is None:
                 return None
-            status = ex.get("status") or ex.get("executionStatus")
+            status = (ex.get("status") or ex.get("executionStatus") or "").upper()
             if status != last:
                 print(f"[{time.strftime('%H:%M:%S')}] {execution_id}: {status}", file=sys.stderr)
                 last = status
@@ -245,14 +245,14 @@ def main(argv=None) -> int:
                 if a.wait and res:
                     final = c.wait(res.get("executionId") or res.get("id"), a.poll, a.wait_timeout)
                     out(final)
-                    return 0 if (final or {}).get("status") in SUCCESS else 1
+                    return 0 if ((final or {}).get("status") or (final or {}).get("executionStatus") or "").upper() in SUCCESS else 1
         elif a.cmd == "executions":
             if a.sub == "get":
                 out(c.request("GET", f"/processing/executions/{a.execution_id}"))
             elif a.sub == "wait":
                 final = c.wait(a.execution_id, a.poll, a.wait_timeout)
                 out(final)
-                return 0 if (final or {}).get("status") in SUCCESS else 1
+                return 0 if ((final or {}).get("status") or (final or {}).get("executionStatus") or "").upper() in SUCCESS else 1
             elif a.sub == "logs":
                 out(c.request("GET", f"/processing/executions/{a.execution_id}/logs"))
             elif a.sub == "terminate":
@@ -270,7 +270,7 @@ def main(argv=None) -> int:
                     start = time.time()
                     while True:
                         st = c.request("GET", f"/processing/executions/plans/{exec_id}")
-                        status = (st or {}).get("status")
+                        status = ((st or {}).get("status") or (st or {}).get("executionStatus") or "").upper()
                         print(f"[{time.strftime('%H:%M:%S')}] plan {exec_id}: {status}", file=sys.stderr)
                         if status in TERMINAL:
                             out(st)

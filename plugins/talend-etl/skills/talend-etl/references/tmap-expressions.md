@@ -702,6 +702,7 @@ org.apache.commons.codec.digest.DigestUtils.md5Hex((row1.a == null ? "" : row1.a
 | Timestamp shifts by hours between source and target | JVM default time zone differs from DB session/host; DST. | `-Duser.timezone=UTC` in JVM args on all engines; `formatDateInUTC`/`parseDateInUTC`; store as UTC. |
 | `Type mismatch: cannot convert from String to Integer` after changing a source schema | tMap does not convert; expression type must match output type. | Add explicit conversion (`Integer.parseInt`) or change the output type and `Sync columns` downstream. |
 | Spark Job: tMap `Reload at each row` / `Store temp data` greyed out, `Numeric.sequence` gives duplicates | Spark tMap has no per-row reload or disk spill; sequence is per-executor. | Redesign as broadcast join; use `monotonically_increasing_id` via tSqlRow or zipWithIndex pattern; see big-data-spark.md. |
+| Lookup query runs N times (one per file) and the run is slow | The tMap and its `Load once` lookup sit inside a subjob driven by an `Iterate` link (e.g. tFileList); `Load once` means once per subjob execution, so the lookup reloads on every iteration | Move the lookup data into tHashOutput in an earlier subjob and read it with tHashInput as the lookup, or restructure so the iterated subjob only reads the file and a later subjob does the join |
 
 ## Sources
 

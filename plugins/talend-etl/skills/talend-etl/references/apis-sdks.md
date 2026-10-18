@@ -156,14 +156,15 @@ set is partially (unverified)):
 | `DEPLOYING` | Engine downloads artifact + dependencies | no |
 | `DEPLOY_FAILED` | Artifact/dependency download or unpack failed on the engine | yes (failure) |
 | `EXECUTING` | Job process running | no |
-| `EXECUTION_SUCCESSFUL` | Job exit code 0 | yes |
+| `EXECUTION_SUCCESS` | Job exit code 0 (task executions, Processing API and Execution History Search) | yes |
 | `EXECUTION_FAILED` | Job exit code != 0 or crashed | yes (failure) |
 | `EXECUTION_REJECTED` | Run refused: parallel run not allowed, engine unavailable/paused, licence | yes (failure) |
 | `TERMINATING` / `EXECUTION_TERMINATED` | Stopped by user/API (`stop`) | yes |
 | `TIMEOUT`? | Engine never acknowledged (unverified) | yes |
 
-It is NOT `EXECUTION_SUCCESS`; match on `EXECUTION_SUCCESSFUL` and compare case-insensitively (different
-endpoints have returned lower case). Poll every 10-30 s; executions of scheduled runs are listed via
+Task executions (`/processing/executions/{id}` and the Execution History Search API) report `EXECUTION_SUCCESS`;
+plan executions (`/processing/executions/plans/{id}`, Orchestration API) report lower-case `execution_successful` /
+`execution_failed`. Compare case-insensitively and accept both spellings. Poll every 10-30 s; executions of scheduled runs are listed via
 `GET /processing/executables/tasks/{taskId}/executions`. The job's own `--context_param` values are passed as
 `parameters` (string values only; TMC casts to the context type). Logs: `GET .../executions/{id}/logs` (unverified)
 returns the log tail or a download URL; full logs are in TMC > Operations > Task run history > Logs, and on the engine
@@ -194,7 +195,7 @@ curl -sS "$API/orchestration/executables/tasks?environmentId=$ENV_ID&limit=100&o
 EXEC=$(curl -sS -X POST "$API/processing/executions" -H "$H" -H "$J" \
   -d "{\"executable\":\"$TASK_ID\",\"parameters\":{\"load_date\":\"2024-05-01\"}}" | jq -r .executionId)
 while :; do S=$(curl -sS "$API/processing/executions/$EXEC" -H "$H" | jq -r .executionStatus | tr a-z A-Z)
-  echo "$S"; case "$S" in EXECUTION_SUCCESSFUL) exit 0;; EXECUTION_FAILED|DEPLOY_FAILED|EXECUTION_REJECTED|*TERMINATED) exit 1;; esac; sleep 15; done
+  echo "$S"; case "$S" in EXECUTION_SUCCESS|EXECUTION_SUCCESSFUL) exit 0;; EXECUTION_FAILED|DEPLOY_FAILED|EXECUTION_REJECTED|*TERMINATED) exit 1;; esac; sleep 15; done
 
 # 4. point a task at a newly published artifact version (full PUT; GET first, patch, PUT back)
 curl -sS "$API/orchestration/executables/tasks/$TASK_ID" -H "$H" > task.json
@@ -704,7 +705,7 @@ MetaServlet or run the launcher.
 | `403 Forbidden` on `POST /processing/executions` but `GET` works | Token owner / service account lacks `Engines - Use` (`TMC_ENGINE_USE`) or workspace `Execute` right; environment not shared | Grant role with TMC_ENGINE_USE + workspace Execute; for service accounts also `Operations` permissions. 403 is a permission problem, never a token problem. |
 | Service-account calls start failing after ~30 min | Token lifetime 30 min | Re-run `POST /security/oauth/token` on 401, cache until `expires_in - 60s`. |
 | Script written for `/tmc/v2.0/tasks` returns 404/410 | Public API v1.x/v2.0/v2.1 removed; tasks live under `/executables/tasks` (v2.0+) and `/orchestration/executables/tasks` | Migrate to family paths; check `swagger-ui.html` for the current version. |
-| Poller never exits because it waits for `EXECUTION_SUCCESS` | Status enum is `EXECUTION_SUCCESSFUL` (and failures `EXECUTION_FAILED`, `DEPLOY_FAILED`, `EXECUTION_REJECTED`, terminated `EXECUTION_TERMINATED`); casing varies by endpoint | Match the real strings case-insensitively; treat any non-`DISPATCHING/DEPLOYING/EXECUTING` as terminal. |
+| Poller never exits | Task executions return `EXECUTION_SUCCESS` (failures `EXECUTION_FAILED`, `DEPLOY_FAILED`, `EXECUTION_REJECTED`, `EXECUTION_TERMINATED`, `EXECUTION_TERMINATED_TIMEOUT`) while plan executions return lower-case `execution_successful` / `execution_failed`; a poller matching only one spelling or one case never exits | Upper-case the value and accept both `EXECUTION_SUCCESS` and `EXECUTION_SUCCESSFUL`; treat anything outside `DISPATCHING/DEPLOYING/EXECUTING/TERMINATING` as terminal. |
 | `EXECUTION_REJECTED` right after `POST /executions` | Previous run still active and `parallelExecutionAllowed=false`, engine paused/unpaired, or licence token limit | Wait for the previous execution, enable parallel in run-config, check engine status. |
 | `PUT /executables/tasks/{id}` drops parameters/connections | PUT is a full replace; partial body resets omitted fields | GET, modify, PUT the entire object (name, workspaceId, artifact, parameters, connections, resources, autoUpgradeInfo). |
 | `PUT run-config` 400 on `cronExpression` | TMC cron minimum granularity 5 min (`*/5`), timezone must be IANA; Quartz vs 5-field format mismatch | Use a 5-minute-or-coarser expression; copy the format from an existing run-config GET. |
