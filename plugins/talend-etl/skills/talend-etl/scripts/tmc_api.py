@@ -53,8 +53,9 @@ REGIONS = {
     "us-west": "https://api.us-west.cloud.talend.com",
     "au": "https://api.au.cloud.talend.com",
 }
-TERMINAL = {"EXECUTION_SUCCESS", "EXECUTION_FAILED", "EXECUTION_REJECTED", "TERMINATED",
-            "EXECUTION_TERMINATED", "CANCELLED", "ABORTED", "DEPLOY_FAILED", "FAILED", "SUCCESS"}
+SUCCESS = {"EXECUTION_SUCCESSFUL", "EXECUTION_SUCCESS", "SUCCESSFUL", "SUCCESS"}
+TERMINAL = SUCCESS | {"EXECUTION_FAILED", "EXECUTION_REJECTED", "TERMINATED", "EXECUTION_TERMINATED",
+                      "CANCELLED", "ABORTED", "DEPLOY_FAILED", "FAILED"}
 
 
 class TmcError(Exception):
@@ -226,14 +227,14 @@ def main(argv=None) -> int:
                 if a.wait and res:
                     final = c.wait(res.get("executionId") or res.get("id"), a.poll, a.wait_timeout)
                     out(final)
-                    return 0 if (final or {}).get("status") == "EXECUTION_SUCCESS" else 1
+                    return 0 if (final or {}).get("status") in SUCCESS else 1
         elif a.cmd == "executions":
             if a.sub == "get":
                 out(c.request("GET", f"/executions/{a.execution_id}"))
             elif a.sub == "wait":
                 final = c.wait(a.execution_id, a.poll, a.wait_timeout)
                 out(final)
-                return 0 if (final or {}).get("status") == "EXECUTION_SUCCESS" else 1
+                return 0 if (final or {}).get("status") in SUCCESS else 1
             elif a.sub == "logs":
                 out(c.request("GET", f"/executions/{a.execution_id}/logs"))
             elif a.sub == "terminate":
@@ -253,9 +254,9 @@ def main(argv=None) -> int:
                         st = c.request("GET", f"/executions/plans/{exec_id}")
                         status = (st or {}).get("status")
                         print(f"[{time.strftime('%H:%M:%S')}] plan {exec_id}: {status}", file=sys.stderr)
-                        if status in TERMINAL or status in ("EXECUTION_SUCCESS", "EXECUTION_FAILED"):
+                        if status in TERMINAL:
                             out(st)
-                            return 0 if status == "EXECUTION_SUCCESS" else 1
+                            return 0 if status in SUCCESS else 1
                         if time.time() - start > a.wait_timeout:
                             raise TmcError("plan wait timed out")
                         time.sleep(a.poll)
