@@ -233,16 +233,16 @@ class InspectJobExport(unittest.TestCase):
 
 class TmcApi(unittest.TestCase):
     def test_dry_run_builds_request(self):
-        c = tmc_api.Client("https://api.eu.cloud.talend.com", "tok", "v2.6", dry_run=True)
+        c = tmc_api.Client("https://api.eu.cloud.talend.com", "tok", dry_run=True)
         buf = io.StringIO()
         old = sys.stdout
         sys.stdout = buf
         try:
-            c.request("POST", "/executions", body={"executable": "abc", "parameters": {"k": "v"}})
+            c.request("POST", "/processing/executions", body={"executable": "abc", "parameters": {"k": "v"}})
         finally:
             sys.stdout = old
         req = json.loads(buf.getvalue())
-        self.assertEqual(req["url"], "https://api.eu.cloud.talend.com/tmc/v2.6/executions")
+        self.assertEqual(req["url"], "https://api.eu.cloud.talend.com/processing/executions")
         self.assertEqual(req["headers"]["Authorization"], "Bearer ***")
         self.assertEqual(req["body"]["parameters"], {"k": "v"})
 
@@ -250,16 +250,23 @@ class TmcApi(unittest.TestCase):
         c = tmc_api.Client("https://x", "t", dry_run=True)
         buf = io.StringIO(); old = sys.stdout; sys.stdout = buf
         try:
-            c.request("GET", "/executables/tasks", {"environmentId": "e1", "workspaceId": None})
+            c.request("GET", "/orchestration/executables/tasks", {"environmentId": "e1", "workspaceId": None})
         finally:
             sys.stdout = old
-        self.assertEqual(json.loads(buf.getvalue())["url"], "https://x/tmc/v2.6/executables/tasks?environmentId=e1")
+        self.assertEqual(json.loads(buf.getvalue())["url"], "https://x/orchestration/executables/tasks?environmentId=e1")
+
+    def test_legacy_prefix_rewrite(self):
+        c = tmc_api.Client("https://x", "t", legacy="v2.6", dry_run=True)
+        self.assertEqual(c._path("/orchestration/executables/tasks/T1"), "/tmc/v2.6/executables/tasks/T1")
+        self.assertEqual(c._path("/processing/executions"), "/tmc/v2.6/executions")
+        self.assertEqual(c._path("/tmc/v2.6/environments"), "/tmc/v2.6/environments")
+        self.assertEqual(tmc_api.Client("https://x", "t")._path("processing/executions"), "/processing/executions")
 
     def test_cli_dry_run_and_param_parsing(self):
         r = run("tmc_api.py", "--dry-run", "--token", "t", "--region", "ap", "tasks", "run", "T1", "--param", "A=1", "--param", "B=x=y")
         self.assertEqual(r.returncode, 0, r.stderr)
         req = json.loads(r.stdout)
-        self.assertEqual(req["url"], "https://api.ap.cloud.talend.com/tmc/v2.6/executions")
+        self.assertEqual(req["url"], "https://api.ap.cloud.talend.com/processing/executions")
         self.assertEqual(req["body"], {"executable": "T1", "parameters": {"A": "1", "B": "x=y"}})
 
     def test_missing_token(self):

@@ -70,7 +70,7 @@ paths and version facts live there, not in this file.
 | Explain or review a job without Studio: contexts, components and key settings, links (row/lookup/reject/iterate/trigger), tMap internals, schemas, subjobs, heuristic review findings | `python3 scripts/inspect_job_item.py JOB_0.1.item --review` (`--format json\|dot`, `--all-params`) |
 | Understand a Build Job export: launchers, main class, JVM args, default context, bundled contexts, jobInfo, drivers in `lib/`, run command | `python3 scripts/inspect_job_export.py JOB_0.1.zip` (zip or extracted dir; `--format json`, `--list`) |
 | Call TAC's MetaServlet correctly (base64 + URL encoding) or decode a captured call | `python3 scripts/metaservlet.py --tac-url http://tac:8080/org.talend.administrator --user u --password-env TAC_PASS runTask --param taskId=12 --param mode=synchronous [--call]` |
-| List/run/poll TMC tasks, plans and executions; inspect engines and run-config | `TALEND_CLOUD_TOKEN=... python3 scripts/tmc_api.py --region eu tasks list --environment-id <id>`; `tasks run <id> --param K=V --wait`; `--dry-run` shows the request |
+| List/run/poll TMC tasks, plans and executions; task history, run-config, schedule; engines; any other path via `raw` | `TALEND_CLOUD_TOKEN=... python3 scripts/tmc_api.py --region eu tasks list --environment-id <id>`; `tasks run <id> --param K=V --wait`; `--dry-run` prints the request. Uses the current `/orchestration` and `/processing` families; `--legacy v2.6` rewrites to `/tmc/v2.6/...`. Success status is `EXECUTION_SUCCESSFUL` |
 | CI gate: links, required sections, ASCII, manifest agreement | `python3 scripts/check_docs.py` |
 
 The inspectors are tested on `fixtures/LOAD_CUSTOMERS_0.1.item` (a Studio-8
@@ -120,8 +120,15 @@ Unit tests: `python3 -m unittest -v tests/test_scripts.py`.
 - `tHashOutput`/`tHashInput` share memory only inside one job execution; pass
   data to a child job via context, files, a DB, or `tBufferOutput` back to the
   parent.
-- Talend Open Studio (TOS) is discontinued; the last open-source Studio was
-  8.0.1 (January 2022). Subscription Studio 8 continues with monthly R-releases.
+- Talend Open Studio (TOS) is discontinued (downloads retired 31 January 2024);
+  the last open-source Studio was 8.0.1 (January 2022). Subscription Studio 8
+  continues with monthly R-releases (R2026-09 at the time of writing); Java 17
+  has been mandatory since R2024-05 and Java 21 since R2026-06.
+- In a job `.item`, a link's `lineStyle` is the `EConnectionType` ordinal:
+  0 row/reject, 1 OnSubjobOk, 3 OnComponentOk, 4 OnSubjobError,
+  5 OnComponentError, 6 RunIf, 7 Iterate, 8 lookup into tMap.
+- TMC task execution statuses end in `EXECUTION_SUCCESSFUL` or
+  `EXECUTION_FAILED` (not `EXECUTION_SUCCESS`); poll `GET /processing/executions/{id}`.
 
 ## Repository and conventions for this plugin
 - `references/` are the source of truth; `SKILL.md` stays an index (< 500 lines).

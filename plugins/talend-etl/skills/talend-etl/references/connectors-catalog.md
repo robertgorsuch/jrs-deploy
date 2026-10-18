@@ -125,7 +125,7 @@ Operational points:
 | Studio itself (update sites, Feature Manager, license, Talend Cloud login) | `Window > Preferences > General > Network Connections` (`Active Provider = Manual`, HTTP/HTTPS host:port, bypass list) or `-Dhttp.proxyHost=... -Dhttp.proxyPort=... -Dhttps.proxyHost=... -Dhttps.proxyPort=... -Dhttp.nonProxyHosts=...` in `Talend-Studio-*.ini` after `-vmargs` | Studio JVM only, not the Jobs it runs | Feature Manager failing with "Unable to read repository" = proxy or blocked `update.talend.com`/`talend-update.talend.com` |
 | Job at design time and runtime | `tSetProxy` (family Internet > Proxy): `Proxy type` HTTP / HTTPS / SOCKS / FTP, `Proxy host`, `Proxy port`, `Proxy user`, `Proxy password`; option `Set a JVM proxy` (unverified label) | Sets `http.proxyHost` etc. JVM-wide for the rest of the Job run; place on a tPreJob or as first subjob | Not for ESB routes/data services (affects whole Talend Runtime). Does NOT apply to SFTP (JSch) - tFTPConnection docs: "SFTP Support does not work with an HTTPS proxy, use tSetProxy"; with HTTP proxy select `FTPS Support` + `Passive` mode |
 | Per-component proxy | `Use or save proxy` / `Use proxy` + `Host`, `Port`, `User`, `Password` on tSalesforce*, tRESTClient, tHTTPClient, tSOAP, tFileFetch, tSendMail (unverified), tGoogleDrive*, tBox*, tMarketo*, tDropbox* (varies) | Component only | tSalesforce* `Use or save the connection session`/`Use Proxy` lives in Advanced settings |
-| JVM args on launchers / TAC / TMC engines | Job `Run > Advanced settings > Use specific JVM arguments` (saved in the item and exported launcher), TAC task JVM parameters, Remote Engine `engine.sh`/`etc/org.talend.ipaas.rt.jobserver.client.cfg` or `JAVA_OPTS` | Whole process | `-Dhttp.nonProxyHosts="localhost|*.internal"` uses `|` separators |
+| JVM args on launchers / TAC / TMC engines | Job `Run > Advanced settings > Use specific JVM arguments` (saved in the item and exported launcher), TAC task JVM parameters, Remote Engine `engine.sh`/`etc/org.talend.ipaas.rt.jobserver.client.cfg` or `JAVA_OPTS` | Whole process | `-Dhttp.nonProxyHosts="localhost\|*.internal"` uses pipe separators |
 | Couchbase | Couchbase SDK does not support proxies; tCouchbase* ignore tSetProxy | | |
 | Authenticated proxies + Java 8u111+ | Basic auth to HTTPS proxies is disabled by default: add `-Djdk.http.auth.tunneling.disabledSchemes=` | | |
 
@@ -174,7 +174,7 @@ Palette: `Cloud > Microsoft > Azure Storage Blob | Azure Storage Queue | Azure S
 | tAzureStorageDelete | Delete blobs matching prefixes | `Container`, `Blobs` table | |
 | tAzureStorageInputTable / tAzureStorageOutputTable | Azure Table storage rows | `Table name`; Input: `Use filter expression` (OData `PartitionKey eq 'x'`), `Name mappings`; Output: `Action on data` Insert / Insert or replace / Insert or merge / Merge / Replace / Delete, `Partition Key`/`Row Key` column mapping, `Process in batch` (100 max per batch, same partition) | No AAD auth (7.3 doc note) |
 | tAzureStorageQueueCreate / QueueDelete / QueueList / QueueInput / QueueOutput / QueueInputLoop / QueuePurge | Azure Storage Queues | `Queue name`; QueueInput: `Number of messages` (<=32), `Peek`/`Delete the message`, `Visibility timeout`; QueueInputLoop: `Loop waiting time`; QueueOutput: `Time to live`, `Initial visibility delay` | Message body is String (base64 handled by SDK) |
-| tAzureAdlsGen2Connection | ADLS Gen2 (DFS endpoint) | `Account Name`, `Endpoint suffix` (`dfs.core.windows.net`); `Authentication method` Shared key (`Shared key` field; pure-password or Java mode, 8.0.1-R2022-05+) / Shared Access Signature (`SAS token`) / Azure Active Directory (`Tenant ID`, `Client ID`, `Client Secret`; R2020-06+ on 7.3) ; 8.0 Output docs also describe Microsoft Fabric OneLake endpoints | TCK (Azure ADLS Gen2 connector `azure-dls-gen2`); Open Studio? No - subscription (unverified) |
+| tAzureAdlsGen2Connection | ADLS Gen2 (DFS endpoint) | `Account Name`, `Endpoint suffix` (`dfs.core.windows.net`); `Authentication method` Shared key (`Shared key` field; pure-password or Java mode, 8.0.1-R2022-05+) / Shared Access Signature (`SAS token`) / Azure Active Directory (`Tenant ID`, `Client ID`, `Client Secret`; R2020-06+ on 7.3) ; 8.0 Output docs also describe Microsoft Fabric OneLake endpoints | TCK (Azure ADLS Gen2 connector `azure-dls-gen2`); subscription (unverified) |
 | tAzureAdlsGen2Input / tAzureAdlsGen2Output | Read/write files in a filesystem path with schema | `Filesystem`, `Blob path`; `Format` CSV / Avro / JSON / Parquet (8.0) ; CSV: `Field delimiter`, `Record separator`, `Header`, `Encoding`, `Text enclosure`, `Escape`; Output: `Blob name template`, `Overwrite` | TCK; also Spark via tAzureFSConfiguration (big-data-spark.md) |
 | tAzureAdlsGen2Get / tAzureAdlsGen2Put / tAzureAdlsGen2List / tAzureAdlsGen2Delete | File transfer and listing against ADLS Gen2 paths | `Filesystem`, `Blob path`, `Local folder`, `Recursive`, `Files` table; Delete has `Recursive` | TCK |
 | tAzureSynapseConnection / Input / Output / Row / Commit / Rollback / Close / BulkExec / OutputBulk / OutputBulkExec | Synapse SQL pool (dedicated/serverless) via mssql JDBC | `Host` (`<ws>.sql.azuresynapse.net`), `Port` 1433, `Database`, `Authentication` SQL password / Azure AD password / Service principal (unverified subset); BulkExec: `COPY INTO` from ADLS/Blob (`Azure Storage` account, container, `Authentication` SAS/Storage key/Managed identity), `File format` CSV/Parquet | Formerly `tAzureSqlDWH*` (Azure SQL Data Warehouse) in 7.x; renamed Synapse in 7.3/8.0; old names remain as deprecated aliases (unverified). Subscription |
@@ -224,7 +224,7 @@ Parameters` (`application=TALEND&...`), `Use custom region`/`Custom Region` (unv
 | --- | --- | --- | --- |
 | tSnowflakeConnection | Shared JDBC session | Connection block above; `Use custom Snowflake region` | TCK |
 | tSnowflakeInput | Read from table or query | `Table Name` + `Condition` (WHERE clause) or `Manual Query`/`Query`; `Guess schema` via `Snowflake table` dropdown; Advanced: `Convert columns and table to uppercase`, `Fetch size` (unverified) | Timestamps mapped to `java.util.Date`; `TIMESTAMP_TZ` loses zone unless read as String |
-| tSnowflakeOutput | Row-level DML via JDBC batches | `Table`, `Table Action` None / Drop and create / Create / Create if not exists / Drop if exists and create / Clear / Truncate (unverified labels); `Output Action` Insert / Update / Upsert / Delete; `Upsert Key Column`; Advanced: `Use Schema Date Pattern`, `Date Pattern`, `Convert empty strings to null`, `Use custom DB type` (unverified) | Internally stages via `PUT`+`COPY` for Insert with `Use batch`? No - plain JDBC; for >100k rows use OutputBulkExec |
+| tSnowflakeOutput | Row-level DML via JDBC batches | `Table`, `Table Action` None / Drop and create / Create / Create if not exists / Drop if exists and create / Clear / Truncate (unverified labels); `Output Action` Insert / Update / Upsert / Delete; `Upsert Key Column`; Advanced: `Use Schema Date Pattern`, `Date Pattern`, `Convert empty strings to null`, `Use custom DB type` (unverified) | Plain JDBC batches (no stage); for >100k rows use tSnowflakeOutputBulkExec |
 | tSnowflakeRow | Execute arbitrary SQL (`CALL proc()`, `MERGE`, `COPY INTO`) | `Query`, `Propagate QUERY's recordset`, `Die on error`, `Commit every` (unverified) | Session parameters like `ALTER SESSION SET TIMEZONE` via tSnowflakeRow on same connection |
 | tSnowflakeOutputBulk | Write rows to a stage file (no COPY) | `Storage` Internal (`Stage Folder`) / S3 (`Region`, `Access Key`, `Secret Key`, `Bucket`, `Folder`) / Azure (`Protocol`, `Account Name`, `Container`, `Folder`, `SAS Token`); file options `Field Separator`, `Compress` (gzip), `Encoding`, `Use Custom Stage Path`/`Stage Name` (`@~`, `@%table`, `@mystage`) | TCK; S3 keys here are the stage keys, not the connection |
 | tSnowflakeBulkExec | `COPY INTO` from existing staged files | Same `Storage` block; `Table`, `Table Action`, `Load Action` (unverified), `Copy Command Options` (`ON_ERROR=CONTINUE`, `PURGE=TRUE`, `FORCE`, `MATCH_BY_COLUMN_NAME`), `Delete Storage Files On Success`, `File Format` CSV/JSON/AVRO/PARQUET (unverified) | Monitor `COPY_HISTORY`/`LOAD_HISTORY` for rejects |
@@ -341,8 +341,7 @@ transport (`Z_TALEND_*` function modules) imported into the SAP system.
 | tSAPODPInput | Operational Data Provisioning (extractors, CDS views, BW objects) with delta | `Subscriber name`, `Context` (SAPI / ABAP_CDS / BW / HANA), `ODP name`, `Extraction mode` Full / Delta init / Delta, `Package size`, `Fields`, `Filter` | 7.3+; delta queue state kept per subscriber in SAP (ODQMON) |
 | tSAPDataSourceReceiver / tSAPDataSourceOutput | Receive data pushed from a BW DataSource (3rd-party BW source system) / write to BW | `DataSource`, `Source system` (Talend registered as 3rd-party system via `RSA1`), RFC server `Program ID`; Output: `Target InfoProvider`, `Request handling` | Talend acts as the BW source system; requires BW admin setup |
 | tSAPBWInput | Generic BW read (OpenHub destination table or MDX) | `Query`/`OpenHub destination` | Older component; DSO/ADSO/InfoCube/ODP are the focused successors |
-| tSAPHanaConnection / Input / Output / Row / Commit / Rollback / Close / BulkExec / OutputBulk / OutputBulkExec / tSAPHanaInvalidRows / tSAPHanaValidRows / tSAPHanaUnload / tSAPHanaInvalidRows | SAP HANA as a JDBC database | `Host`, `Port` 3xx15, `Database`/`Schema`, `ngdbc.jar` driver; BulkExec = `IMPORT FROM CSV FILE` on server-side path (unverified) | DB family in `Databases > SAP HANA`; see components-core.md for shared params |
-| tSAPIDocInput, tSAPBWInput, tSAPInfoCubeInput | Pointer: BW on HANA replacement is ODP/CDS | | |
+| tSAPHanaConnection / Input / Output / Row / Commit / Rollback / Close / BulkExec / OutputBulk / OutputBulkExec / tSAPHanaUnload | SAP HANA as a JDBC database | `Host`, `Port` 3xx15, `Database`/`Schema`, `ngdbc.jar` driver; BulkExec = `IMPORT FROM CSV FILE` on server-side path (unverified) | DB family in `Databases > SAP HANA`; see components-core.md for shared params |
 
 ## NoSQL
 
@@ -386,7 +385,7 @@ documented in big-data-spark.md.
 | tKafkaOutput | Produce | `Topic name`, `Compress the data` (gzip/snappy/lz4/zstd), `Serializer` String/byte[], `Key` column (`Set a key column` / `Use key`), `Producer properties` table (`acks=all`, `enable.idempotence=true`, `linger.ms`, `batch.size`, `max.request.size`) | Message = one input row's single column (String/byte[]); build JSON upstream with tWriteJSONField |
 | tKafkaCommit | Commit consumer offsets of a tKafkaInput on the same connection | `Component List` (the tKafkaInput) | Place after the processing subjob to get at-least-once semantics |
 | tKafkaCreateTopic | Admin create topic | `Topic`, `Partitions`, `Replication factor`, `Action on topic` Create / Create if not exists, `Topic properties` (`retention.ms`) | 7.x+ |
-| tKafkaInputAvro | Consume Avro with schema | `Avro schema`/Schema Registry URL (`schema.registry.url` in properties) | Spark Streaming only (big-data-spark.md); for Standard jobs decode Avro bytes with tExtractAvroFields? No - use tJavaRow + Confluent deserializer or tKafkaInput byte[] + routine |
+| tKafkaInputAvro | Consume Avro with schema | `Avro schema`/Schema Registry URL (`schema.registry.url` in properties) | Spark Streaming only (big-data-spark.md); in Standard Jobs consume byte[] with tKafkaInput and decode with a routine/tJavaRow using the Avro or Confluent deserializer (tLibraryLoad) |
 | tJMSInput / tJMSOutput | Generic JMS 1.1 via JNDI | `Context Provider` (`org.apache.activemq.jndi.ActiveMQInitialContextFactory`, `com.sun.jndi.fscontext.RefFSContextFactory` for IBM MQ bindings, `org.jboss.naming.remote.client.InitialContextFactory`, `org.apache.qpid.jms.jndi.JmsInitialContextFactory` for AMQP 1.0), `Server URL` (`tcp://host:61616`, `file:/path/.bindings`), `Connection Factory JNDI Name` (`ConnectionFactory`), `Use Specified User Identity` (`User`, `Password`), `Message Type` Queue / Topic, `To`/`From` (destination name; ActiveMQ `dynamicQueues/foo` style via JNDI props), `Message Selector` (SQL92), `Timeout`, `Maximum Messages`, `Processing Mode` Raw message / Message content (unverified), `Properties` table (JNDI env), `Durable subscription`/`Client ID` (Topic), Output: `Delivery mode` Persistent / Non persistent, `Priority`, `Time to live`, `Message properties` table, `Reply to` (unverified); Advanced: `Transacted`/`Acknowledgement mode` AUTO / CLIENT / DUPS_OK | javajet; Open Studio. The JMS provider client jars (activemq-all, com.ibm.mq.allclient + jms.jar, artemis-jms-client) must be added via `Modules`/tLibraryLoad; mismatched versions = `ClassNotFoundException`/`NoSuchMethodError` at runtime |
 | tMomConnection / tMomInput / tMomOutput / tMomCommit / tMomRollback / tMomClose / tMomMessageIdList (unverified) | Vendor-specific MOM shortcuts | `MQ Server` ActiveMQ / JBoss Messaging / WebSphere MQ; `Host`, `Port` (61616 / 1414), `Username`/`Password`; WebSphere MQ only: `QueueManager`, `Channel` (default `DC.SVRCONN`), `MessageQueue`, `Set Transacted`, `Target client` MQ / JMS (unverified), `CCSID`; ActiveMQ: `Failover` (`failover:(tcp://a,tcp://b)`), `Static Discovery`, `Transport options` table; Input: `Message Type` Queue/Topic, `To`/`From`, `Timeout`, `Maximum messages`, `Message body type` String / byte[] (`Use byte[]`), `Get message id`/`Get message headers`; Output: `Message` column, `Delivery mode` | javajet; IBM MQ needs `com.ibm.mq.allclient.jar` (not downloadable by Studio; license). 8.0 docs also list newer `tMessagingInput`/`tMessagingOutput` (JMS family) that delegate to "Configure JMS producers / WebSphere MQ connector" pages (unverified details) |
 | tMessagingInput / tMessagingOutput | 8.0 unified messaging (JMS/WMQ) components | `Connection` type, `Destination`, `Message format`; see 8.0 `mom`/`jms` family pages | 8.0 R-update additions (unverified scope) |
@@ -397,3 +396,403 @@ documented in big-data-spark.md.
 | tSQS* | AWS SQS Standard components | see Cloud: Amazon | |
 | IBM MQ | tMomInput/Output `MQ Server = WebSphere MQ` (native MQ classes) or tJMSInput/Output with `.bindings` JNDI file (`com.sun.jndi.fscontext.RefFSContextFactory`) created by `JMSAdmin`; Route `cMQConnectionFactory` + `cJMS`/`cWMQ` | | |
 | cKafka, cJMS, cMQTT, cAMQP, cMQConnectionFactory | Route (Camel) messaging components | esb-routes-services.md | cKafka `Auto Offset Reset` EARLIEST / LATEST / NONE |
+
+## Internet
+
+Palette `Internet > FTP | SCP | HTTP | REST | SOAP | Mail | Socket | Proxy | SSH`.
+
+| Component | Purpose | Key settings / auth | Notes (license, version, TCK vs javajet) |
+| --- | --- | --- | --- |
+| tFTPConnection | FTP / FTPS / SFTP session | `Host`, `Port` (21 / 990 implicit FTPS / 22 SFTP), `Username`, `Password`; `SFTP Support` + `Authentication method` Password / Public key (`Private key`, `Key Passphrase`) / Public key and password; `FTPS Support` + `Keystore File`/`Keystore Password` (server private key or client cert), `Security mode` Implicit / Explicit, `Protection level` (unverified), TLS version (Java 17: session resumption between control and data connection only with `TLSv1.2` + specific JVM props per 8.0 doc); `Connection Mode` Passive / Active; `Encoding` (`ISO-8859-1` default for FTP control channel); Advanced: `Use Socks Proxy` (`Proxy host/port/user/password`), `Ignore failure at quit`, `Connection timeout`, `Data channel timeout`/`Keep alive` (unverified) | javajet (commons-net + JSch); Open Studio. SFTP + HTTPS proxy is unsupported: use tSetProxy; with an HTTP proxy choose `FTPS Support` + `Passive`. `Use Perl5 Regex Expression as Filemask` option on list/get components |
+| tFTPPut / tFTPGet | Upload/download by masks | `Local directory`, `Remote directory`, `Files` table (`Filemask`, `New name`), `Transfer mode` ASCII / Binary, `Overwrite file` Never / Always / Size differs / ... (unverified), `Append`, `Create directory if not exists` (Put), Get: `Delete remote files after transfer` (unverified), `Ignore failure at quit` | Globals `..._NB_FILE`, `..._CURRENT_FILE`, `..._CURRENT_STATUS`, `..._TRANSFERRED_FILES` list (unverified) |
+| tFTPFileList | Iterate remote files/dirs | `Remote directory`, `Files` masks, `Include subdirectories`, `Order by` Name / Size / Modified date (unverified), `List type` Files / Directories / Both; globals `..._CURRENT_FILE`, `..._CURRENT_FILEPATH`, `..._CURRENT_FILEDIRECTORY`, `..._NB_FILE` | Iterate link to tFTPGet / tFTPDelete |
+| tFTPFileExist | Check a remote file | `Remote directory`, `File name`; global `..._EXISTS` (boolean) | |
+| tFTPFileProperties | Size, mtime, permissions of a remote file | Output schema `abs_path`, `dirname`, `basename`, `mode_string`, `size`, `mtime`, `mtime_string` (unverified subset) | |
+| tFTPDelete / tFTPRename / tFTPTruncate | Remove / rename / empty remote files | `Files` table; Rename has `Filemask`/`New name`; Truncate writes zero-length | |
+| tFTPClose | Close session | | |
+| tSCPConnection / tSCPGet / tSCPPut / tSCPDelete / tSCPFileExists / tSCPFileList / tSCPRename / tSCPTruncate / tSCPClose | SCP over SSH (JSch) | `Host`, `Port` 22, `Username`, `Authentication method` Password / Public key (`Private key`, `Passphrase`), `Files` masks, `Local/Remote directory`, `Overwrite` | Open Studio. Strict host key checking off by default (unverified); ed25519 keys need newer JSch (8.0) |
+| tSSH | Run remote commands over SSH | `Host`, `Port`, `User`, `Authentication method` Password / Public key / Keyboard interactive (unverified), `Commands` table (one row per command), `Timeout`, `Pseudo terminal`, `Standard output`/`Error output` columns, `Die on error`/`Exit code` global `..._EXIT_CODE` | `System` family in 7.x (orchestration-logging.md covers tSystem); listed here as a connector |
+| tFileFetch | HTTP(S) GET/POST download to file or stream | `Protocol` http / https / ftp (unverified), `URI`, `Method` GET / POST, `Destination directory`, `Target file name`, `Headers` table, `Use cache` (ETag/If-Modified-Since-based reuse of local copy), `Upload file` (multipart POST with `File name`/`Field name`), `Read cookie`/`Save cookie` files, `Use authentication` (Basic), `Use proxy`, `Post parameters` table, `Timeout`, `Expose stream` (flow via `tFileFetch_1_INPUT_STREAM` to a tFileInput* `Use existing stream`), `Die on 4xx/5xx` via `Check response code` (unverified), `Disable SSL certificate validation` (unverified) | javajet; Open Studio. For APIs with JSON bodies use tHTTPClient/tRESTClient instead |
+| tHttpRequest | Simple HTTP GET/POST returning body as String row | `URI`, `Method` GET / POST, `Post parameters`, `Write response content to file` / `Response file`, `Need authentication` (Basic), `Headers` table (7.x+), `Use proxy`, `Follow redirects`, `Timeout`, `Response encoding`, global `..._RESPONSE_CODE` (unverified) | javajet, Open Studio; superseded by tHTTPClient |
+| tHTTPClient | 8.0 TCK HTTP client (recommended over tRESTClient per 8.0 doc) | `Base URL` + `Path`/`Resource`, `Method` GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS, `Authentication` None / Basic / Digest / Bearer / OAuth 2.0 client credentials (`Token endpoint`, `Client ID`, `Client Secret`, `Scopes`) / NTLM / API key (header or query) (unverified subset), `Query parameters`, `Headers`, `Body` type Raw (text/JSON/XML) / Form data / Multipart (`File` parts), `Timeout`, `Max redirects`, `Accept redirections`, `Bypass server certificate validation`; Response: `Output body format` Raw text / JSON / XML / Bytes, `Output key/value pairs`, `Pagination` (Offset/limit or Page or Cursor/Next link with JSONPath `Next page path`), `Die on error` on HTTP >= 400, response `headers` and `status` columns (unverified names), `Response payload as a file`/`Download file` | TCK (`http`); 8.0.1-R2022+; Open Studio? subscription (unverified). Pipeline Designer "HTTP Client" connector is the same TCK code |
+| tRESTClient | CXF-based REST client (ESB REST family but usable in DI Jobs) | `URL`, `Relative Path`, `HTTP Method` GET / POST / PUT / PATCH / DELETE, `Content Type` XML / JSON / FORM / TEXT / ANY, `Accept Type` XML / JSON / ANY (ANY -> response as String), `Query parameters` (name/value), `Headers` (name/value), input `body` column (String or Document) when POST/PUT, `Use Authentication` None / Basic HTTP / OAuth2 Bearer (`Token`) / HTTP Digest / Kerberos (SPNEGO) / SAML (unverified subset), `Use Service Registry`/`Use Service Locator`/`Use Authorization` (Talend ESB infrastructure), `Use SSL`/`Trust server certificate` via tSetKeystore; Advanced: `Convert Response To DOM Document` (Document type `body` instead of String), `Log messages`, `Connection timeout`/`Receive timeout` (ms), `Disable chunking`, `Use proxy`, `Drop JSON request root` (unverified), `Enable JSON-to-XML conversion`; Outputs `Response` (`statusCode`, `body`, `string`/`headers` via `Response` schema) and `Error` flows (unverified names) | javajet (Apache CXF JAX-RS client); Open Studio includes it. Prefer tHTTPClient in 8.0 for OAuth and pagination; keep tRESTClient when ESB registry/SAML needed |
+| tREST (deprecated) | Minimal REST call (HttpClient 3) | `URL`, `HTTP Method`, `HTTP Headers` table, `HTTP Body` (POST/PUT) | Deprecated since 6.x; output `Body` String only; replaced by tRESTClient/tHTTPClient |
+| tSOAP | Call a SOAP 1.1/1.2 endpoint with a raw envelope | `ESB`/`Use NTLM`/`Use Authentication` (Basic, `Domain` for NTLM), `Endpoint`, `SOAP Action`, `SOAP version` 1.1/1.2, `Message` (envelope String from upstream, typically tXMLMap or tFixedFlowInput), `Use proxy`, `Trust server with SSL`/`Use SSL` (tSetKeystore), Output `Body` as String or `Output in Document` (XML Document type) , `Header` column, `Die on error` on SOAP faults | javajet; Open Studio. Pair with tXMLMap to parse the response Document |
+| tWebService | WSDL-driven SOAP client with a mapping editor (`Component > Advanced > Edit`/`...` opens the Web Service editor) | `WSDL` URL/file, `Service`/`Port`/`Operation` (fetched by `Refresh`), input/output mapping in the editor (drag columns to request parts), `Use authentication`, `Use http proxy`, `Trust server with SSL`, `Timeout` | javajet (Axis2/CXF code generated at design time into the Job); Open Studio. Complex schemas (choice/any) often fail - fall back to tSOAP + tXMLMap |
+| tWebServiceInput (deprecated) | Older WSDL client, flat result | `WSDL`, `Method`, `Parameters` table, `Advanced Use` (Java code) | Deprecated 5.x+, still shipped; replace with tWebService or tSOAP |
+| tXMLRPCInput (deprecated, unverified) | XML-RPC call | `Server URL`, `Method`, `Parameters` | Legacy |
+| tSocketInput / tSocketOutput | Raw TCP socket row exchange between Jobs/processes | `Host`, `Port`, `Timeout`, `Row separator`/`Field separator`, `Escape char`/`Text enclosure`, `Encoding`, Input `Timeout` then stop (unverified) | Open Studio; tSocketOutput sends a delimited stream; used for simple inter-process piping |
+| tSetProxy | JVM-level proxy for the rest of the Job | see Proxy handling | Open Studio |
+| tSendMail / tPOP / tFileInputMail | Mail | see XML, JSON, LDAP, Mail | |
+
+## XML, JSON, LDAP, Mail
+
+| Component | Purpose | Key settings / auth | Notes (license, version, TCK vs javajet) |
+| --- | --- | --- | --- |
+| tXSLT | Apply an XSLT stylesheet to a file | `XML file`, `XSL file`, `Output file`, `Parameters` table (name/value passed to `<xsl:param>`) | javajet; Open Studio; XSLT 1.0 via JDK Xalan unless Saxon added with tLibraryLoad + `javax.xml.transform.TransformerFactory` system prop |
+| tDTDValidator / tXSDValidator | Validate XML file against DTD / XSD | `DTD file`/`XSD file`, `XML file` (`Mode` File / Flow for tXSDValidator: validate a `Document` column), `If XML is valid`/`If XML is invalid` output messages, `Print to console`; valid/invalid routed by `If XML is valid` / `If XML is invalid` triggers; no row flows (unverified) | Open Studio |
+| tExtractXMLField | Parse XML held in a String/Document column into columns via XPath | `XML field` (input column), `Loop XPath query`, `Mapping` table (`Column`, `XPath query`, `Get Nodes`), `Limit`, `Ignore DTD file`, `Ignore the namespaces` / `Namespace` table, `Generation mode` Dom4j / SAX (unverified), `Encoding` | Open Studio; see tmap-expressions.md for tXMLMap as the alternative |
+| tWriteXMLField | Build an XML String/Document column from flow using a tree editor | `Output Column` (String or Document), `Configure XML Tree` (loop element, group by, attributes), `Remove root`? / `Create empty element if needed`, `Encoding`, `Advanced separator`, `Trim data`, `Compact format` | Open Studio |
+| tAdvancedFileOutputXML | Write a multi-level XML file via tree mapping | `File Name`, `Configure XML Tree` (loop element, `Group by`, `Set As Attribute`, `Set As Loop Element`), `Append the source xml file`, `Create directory if not exists`, `Split output in several files` (`Rows in each output file`), `Encoding`, `Compact format`, `Generation mode` Slow and memory-consuming (DOM) / Fast with low memory (SAX) (unverified labels), `Advanced separator` | Open Studio; for DTD/XSD-driven output use the schema import (`Import from XSD`) in the tree editor |
+| tFileOutputXML, tFileInputXML | Simple XML file I/O | components-core.md | |
+| tXMLMap | Hierarchical mapping | tmap-expressions.md | |
+| tExtractJSONFields / tWriteJSONField / tFileInputJSON / tFileOutputJSON | JSON | `Read By` JsonPath / XPath / JsonPath without loop, `Loop Jsonpath query`, `Mapping` (`Json query`); tWriteJSONField same tree editor as XML with `Remove root node` | components-core.md owns these; listed as pointers |
+| tLDAPConnection | Bind to a directory | `Host`, `Port` 389 / 636, `Base DN` ("path to user's authorized tree leaf"), `Protocol` LDAP / LDAPS / TLS (StartTLS), `Authentication` Simple (`User` = bind DN, `Password`) / Anonymous, `Advanced CA` (truststore via tSetKeystore or `Use certificate`/`Keystore path` (unverified)), `Referrals` Ignore / Follow, `Alias dereferencing` Always / Never / Searching / Finding | javajet (JNDI); Open Studio |
+| tLDAPInput | Search with filter | `Filter` (RFC 4515, e.g. `(&(objectClass=person)(uid=jdoe))`), `Multi-valued field separator` (`,`), `Alias dereferencing`, `Referrals handling`, `Limit`/`Time limit`, `Paging` (`Page size`, AD 1000-entry cap), schema column `DN` returns the entry DN, `Fetch attributes` list from the schema columns, `Binary attributes` (`objectGUID`, `objectSid`; `Use binary field`?) (unverified) | Attribute names in schema must match LDAP attribute names (`sAMAccountName`, `memberOf`); multi-valued attributes join with the separator |
+| tLDAPOutput | Add / Update / Delete entries | `Insert`/`Update`/`Delete`/`Insert or update` via `Mode`, `Multi-valued field separator`, `Use attribute options` / `Attribute options` table (operation per attribute: Add / Replace / Remove), `DN` column required for the entry (Base DN = highest reachable leaf when full DN comes from tMap) | Password attribute `unicodePwd` on AD needs LDAPS + UTF-16LE quoted value |
+| tLDAPAttributesInput | List attributes of entries matching a filter | `Filter`, output `Attribute`/`Value`/`DN` rows (schema fixed) | Schema discovery for unknown directories |
+| tLDAPRenameEntry | Rename / move DN | `Filter` or `DN` input column, `New DN`/`Rename to`, global `GetResultName` for retrieving the base DN automatically (doc mention) | |
+| tLDAPClose | Close | | |
+| tSendMail | SMTP send with attachments | `To`/`From`/`Cc`/`Bcc`, `Subject`, `Message` (text or HTML with `MIME subtype` plain/html, `Encoding`), `Attachments` table (file paths; `Die if the attachment file doesn't exist` checkbox default on), `Headers` table (custom MIME headers), `SMTP host`/`Port` (25 / 587 STARTTLS / 465 SSL), `SSL support` (implicit SSL; for 587 use `STARTTLS support` (7.3+, unverified label)), `Need authentication` (`Username`, `Password`), `Importance`, `Die on error`; Advanced: `Debug mode` (JavaMail debug), `Set smtp socket timeout` (unverified) | javajet (JavaMail); Open Studio. Gmail: port 465 + `SSL support` + app password (community). Office 365: 587 + STARTTLS; Basic auth disabled by Microsoft -> use OAuth2 via tHTTPClient (Graph `sendMail`) or an SMTP relay |
+| tPOP | Download messages (POP3/IMAP) to files | `Protocol` POP3 / IMAP, `Server`, `Port` (110/995, 143/993), `Username`/`Password`, `Use SSL`, `Folder` (IMAP, `INBOX`), `Output directory`, `Filename pattern` (`Mail` + timestamp), `Retrieve all emails` / `Retrieve newer than` / `Retrieve latest N`, `Delete emails from the server`, `Filter` by `Subject`/`From`/`To`/`Date` (`Filter Type`, `Filter Value`) (unverified subset) | Open Studio. Writes `.eml`-like files; parse with tFileInputMail |
+| tFileInputMail | Parse an email file's headers/parts into columns | `File Name`, `Mail Parts` table (`Column`, `Mail part` e.g. `From`, `To`, `Subject`, `Body`, `Date`, custom header), `Attachment export directory`, `Extract attachments` | Pair: tPOP (Iterate on files) -> tFileInputMail |
+
+## Business Intelligence
+
+Palette `Business Intelligence` (7.x: `Business Intelligence > Jasper | Palo | SPSS`). Mostly legacy.
+
+| Component | Purpose | Key settings / auth | Notes (license, version, TCK vs javajet) |
+| --- | --- | --- | --- |
+| tJasperOutput | Fill a JasperReports `.jrxml`/`.jasper` with the input flow as datasource and export | `Jasper file` (`.jrxml` compiled at run or `.jasper`), `Output file`, `Report format` PDF / HTML / XLS / RTF / CSV / XML / TXT (unverified set), `Parameters` table (report params), `Encoding`, `iReport path`/`Edit with iReport` button (opens iReport/Jaspersoft Studio if configured in Preferences) | javajet; Open Studio; bundles JasperReports library (version pinned per Studio, old 6.x in 8.0 (unverified)). For JasperReports Server interaction use the jasper-deploy skill / REST via tHTTPClient |
+| tJasperOutputExec | tJasperOutput without input flow (report has its own SQL datasource) | `Jasper file`, `Output file`, `Report format`, `Database connection` (reuse a `t<DB>Connection`) (unverified), `Parameters` | Standalone trigger component |
+| tBIRTOutput (unverified) | Eclipse BIRT report run | | Not in 7.x/8.0 palettes; ignore |
+| tPaloConnection / tPaloInput / tPaloOutput / tPaloOutputMulti / tPaloCube / tPaloCubeList / tPaloDimension / tPaloDimensionList / tPaloDatabase / tPaloDatabaseList / tPaloRule / tPaloRuleList / tPaloCheckElements / tPaloClose | Jedox Palo OLAP cubes/dimensions | `Host`, `Port` 7777, `Username`/`Password`; `Database`, `Cube`, `Dimension`, `Element` mapping, `Splash mode` for consolidated cells | Deprecated 7.x, removed from 8.0 palette (unverified); use Jedox REST via tHTTPClient |
+| tSPSSInput / tSPSSOutput / tSPSSProperties / tSPSSStructure | Read/write IBM SPSS `.sav` files | `File name`, `Properties` (variable labels), `Structure` | Deprecated 7.x (requires SPSS I/O module), removed 8.0 (unverified); use Python/pyreadstat via tSystem or convert to CSV |
+| tSalesforceEinstein* | CRM Analytics | see Salesforce | |
+| tTableauOutput / tMicroStrategy* / tPowerBI* | Not present | Export CSV/Hyper via tFileOutput* or tHTTPClient to Tableau REST/Power BI push datasets | No native BI vendor components beyond Jasper/Palo/SPSS |
+| tGoogleAnalyticsInput (deprecated) | GA Universal Analytics v3 | see Cloud: Google | |
+
+## Talend Cloud and Data Fabric integration components
+
+| Component | Purpose | Key settings / auth | Notes (license, version, TCK vs javajet) |
+| --- | --- | --- | --- |
+| tDataprepRun | Apply a Talend Data Preparation recipe (preparation) to the flow | `URL` (Data Prep server or Talend Cloud region URL `https://tdp.<region>.cloud.talend.com`), `Username`/`Password` or `Personal access token` (Cloud), `Preparation` (`Fetch preparations`/ path or ID), `Version` (Current state / specific version), `Deployment` Cloud (runs on the same engine as the Job) / On-Premises (runs on the Data Prep server), `Dynamic schema`? (unverified), `Action on error` Fail / Skip (unverified) | TCK-ish; not shipped by default -> Feature Manager (`Data Preparation` feature). See data-quality-governance.md for preparations themselves |
+| tDatasetInput | Read a Data Preparation / Data Inventory dataset by ID | `URL`, credentials/PAT, `Dataset ID` (from the dataset URL in Talend Cloud), `Fetch datasets` | Not shipped by default; Feature Manager |
+| tDatasetOutput | Publish the flow as a new/updated dataset in Talend Cloud Data Preparation / Inventory | `Dataset name`, `Action` Create / Update (`Dataset ID`), `Limit` rows (unverified) | Same feature package |
+| tDataStewardshipTaskInput / tDataStewardshipTaskOutput / tDataStewardshipTaskDelete | Read / create / delete Data Stewardship campaign tasks | `URL` (`https://tds.<region>.cloud.talend.com/data-stewardship` or on-prem), `Username`/`Password` or PAT, `Campaign` (`Fetch` button loads campaigns and their schema), `Task type` Resolution / Merging / Arbitration / Grouping; Input: `Task state` filter (New / Ready to resolve / Resolved...), `Assignee`, `Query` (Lucene), `Batch size`; Output: `Priority`, `Assignee`, `Tags`, `Source` columns, for Merging tasks `Golden record`/`Source records` mapping via `Mapping` of `TDS_*` columns | TCK-ish; subscription (Data Fabric / DQ); details in data-quality-governance.md |
+| tMDM* (tMDMConnection, tMDMInput, tMDMOutput, tMDMDelete, tMDMRouteRecord, tMDMTriggerInput/Output, tMDMBulkLoad, tMDMViewSearch, tMDMSP, tMDMCommit/Rollback/Close, tMDMReceive, tMDMRestInput) | Talend MDM server | `URL` (`http://host:8180/talendmdm/services/soap`), `Username`/`Password`, `Data Model`, `Data Container`, `Entity`, `XPath`/`Query`, `Operation` Update / Insert / Partial update | Subscription (MDM Platform, EOL path); data-quality-governance.md |
+| tDQRules*, tMatchGroup, tRecordMatching, tStandardize*, tAddressRow* | Data Quality | data-quality-governance.md | |
+| tESB*, tRESTRequest/Response, tRouteInput/Output, c* | ESB / Routes | esb-routes-services.md | |
+| API Tester / API Designer | Cloud apps, no components | esb-routes-services.md | |
+
+## Data Mapper (tHMap)
+
+Talend Data Mapper (TDM, "Hierarchical Mapper") is a subscription feature (Data Fabric / DI
+Platform) installed via Feature Manager (`Data Mapper`, plus `Data Mapper for Spark` for the Spark
+I/O components). Structures (`Repository > Metadata > Hierarchical Mapper > Structures`) model
+COBOL copybooks, EDI (X12, EDIFACT, HL7, SWIFT MT/MX), flat/positional, XML/XSD, JSON, Avro;
+Maps transform one structure into another with TDM functions (`Loop`, `Filter`, `Concat`,
+`LookUp`, `AgConcat`, `IOFunction`...). The map editor opens from the component (`...` next to
+`Map Path`/`Select an existing map` or `Generate hierarchical mapper structure based on the schema`).
+
+| Component | Purpose | Key settings / auth | Notes (license, version, TCK vs javajet) |
+| --- | --- | --- | --- |
+| tHMap | Execute a TDM map inside a Standard Job flow (one or many inputs/outputs) | `Map Path` (`Select an existing map`) or `Generate hierarchical mapper structure based on the schema` for the connected flows, `Input/Output representation` (XML / JSON / CSV / Flat / Avro...), `Open Map Editor`, `Exception threshold`/`Error handling`, `Use Document type` input columns, `Rows`/`Record` mode (unverified) | Multiple inputs require TDM I/O functions in the map; in-memory per record |
+| tHMapFile | Run a map over a whole file (streaming) in a Standard Job | `Map Path`, `Input file`/`Output file`, `Input/Output representation`, `Streaming` / `Record boundary` (unverified) | Standard; good for large EDI/COBOL files |
+| tHMapRecord | Run a map over records in a Spark Streaming/Batch flow (record by record) | `Map Path`, record representation | Spark (big-data-spark.md) |
+| tHMapInput | Spark Batch/Streaming input: read a file through a TDM structure as the start of the flow | `Storage` (HDFS/S3/ADLS configuration component), `Input file`, `Structure`/`Map`, `Open Map Editor` | "not shipped with Talend Studio by default" -> Feature Manager `Data Mapper > Talend Data Mapper for Spark` |
+| tHMapOutput | Spark Batch/Streaming output through a structure | `Output file`, `Representation`, `Map Path` | Spark |
+| tHConvertFile | Convert a file between representations using one structure (e.g. COBOL -> XML) without a map | `Structure`, `Input representation`, `Output representation`, files, `Streaming` | Standard, subscription |
+| Structures import | `Import > COBOL copybook`, `XSD`, `EDI standard library` (X12/EDIFACT bundled), `Sample document` (CSV/JSON inference) | | Keep structures in the shared repository project for reuse |
+
+## Technical and misc connectors
+
+| Component | Purpose | Key settings / auth | Notes (license, version, TCK vs javajet) |
+| --- | --- | --- | --- |
+| tLibraryLoad | Add a jar to the Job classpath at design/compile time | `Library` (pick from Studio module list or `Browse` local jar; stored in `Modules` and in `pom.xml` as `talend-custom-libs` dep), `Import` statements (`import com.foo.*;`) for tJava*, Advanced `Lib Paths` (runtime path) | Custom Code family; Open Studio. Jar is copied into the exported Job `lib/`; CI builds must have it in Nexus `talend-custom-libs-release` |
+| tSetKeystore | Set JVM truststore/keystore | `Set TrustStore` (`TrustStore type` JKS/PKCS12, `TrustStore file`, `TrustStore password`), `Need Client authentication` (`KeyStore type/file/password`), `Check server identity` (unverified), `Set KeyStore only`/`Both` (8.0 options; some gated on R-updates) | Sets `javax.net.ssl.trustStore*` system properties for the whole JVM for the rest of the run; not supported in ESB. Put first via OnSubjobOk; alternatively import the CA into the JRE `cacerts` of Studio/JobServer/Remote Engine |
+| tSetProxy | see Proxy handling | | |
+| tSystem | Run OS command | orchestration-logging.md | |
+| tSSH | see Internet | | |
+| tRunJob | Call a child Job | orchestration-logging.md | |
+| tChronometerStart / tChronometerStop | Timing | orchestration-logging.md | |
+| tServerAlive | TCP ping host:port | `Host`, `Port`, `Timeout`, `Iterate` ok/ko flows | orchestration-logging.md |
+| tMsgBox / tSleep / tWaitForFile / tWaitForSqlData / tWaitForSocket | Orchestration | orchestration-logging.md | |
+| tSCPTruncate / tFTPTruncate | Empty remote files (used for lock files) | | |
+| tJavaRow / tJava / tJavaFlex | Escape hatch for any REST/SDK call with tLibraryLoad | components-core.md / tmap-expressions.md | |
+
+## Pipeline Designer connectors
+
+Talend Cloud Pipeline Designer (and its successor flows in Qlik Talend Cloud) uses the TCK
+connector catalog directly, not Studio components: a **connection** (datastore) + a **dataset**
+created in Talend Cloud Data Inventory, run by a Cloud Engine for Design or a Remote Engine Gen2.
+Names differ from Studio (`Amazon S3`, `Azure Data Lake Storage Gen2`, `Google BigQuery`,
+`Snowflake`, `Salesforce`, `Marketo`, `NetSuite`, `Workday`, `Zendesk`, `Box`, `HTTP Client`,
+`REST`, `Kafka`, `Pub/Sub`, `Kinesis`, `Azure Event Hubs`, `MongoDB`, `Couchbase`, `Elasticsearch`,
+`JDBC`, `Database` dialects, `Test connection`, `Local connection`). Capabilities differ: e.g.
+Pipeline Designer S3 reads Parquet/Avro natively and streams, Studio tS3* only moves files; Pipeline
+Kafka needs no "stop after" condition because pipelines run as streams. A Studio Job cannot embed a
+pipeline; integrate via Talend Cloud API (apis-sdks.md) or shared datasets (tDatasetInput). See
+deployment-runtime.md for Remote Engine Gen2 and data-quality-governance.md for Data Inventory.
+
+## Component availability by license
+
+Edition column reflects 7.x/8.0 Studio palettes; Open Studio for Data Integration (free, discontinued
+for new downloads in Jan 2024 and unsupported) vs subscription Data Integration / Big Data /
+Data Fabric. "Cloud-only" = exists as a Pipeline Designer/Qlik Talend Cloud connector, not in Studio.
+
+| Family | Open Studio (DI) | Subscription DI / Platform | Big Data / Data Fabric | Notes |
+| --- | --- | --- | --- | --- |
+| Amazon S3, Redshift, Aurora, RDS MySQL/Oracle, DynamoDB (Standard), SQS | yes | yes | yes | EMR manage, Kinesis, Spark DynamoDB: Big Data only |
+| Azure Storage Blob/Queue/Table, Cosmos DB (Mongo API) | yes | yes | yes | ADLS Gen2, Synapse, Event Hubs: subscription (unverified for ADLS) |
+| Google BigQuery, Cloud Storage, Drive | yes | yes | yes | Pub/Sub, Dataproc, Bigtable: Big Data |
+| Snowflake | basic Connection/Input/Output/Row/Close (unverified) | yes incl. bulk | yes | |
+| Databricks DBFS / Delta Lake JDBC | no | Delta Lake JDBC yes (unverified) | yes | Spark-on-Databricks: Big Data |
+| Salesforce | yes (Connection/Input/Output/Bulk, GetDeleted/Updated/Timestamp) | yes | yes | Einstein/Wave: subscription |
+| Marketo, NetSuite, Workday, ServiceNow, Zendesk, Box, Jira, Splunk | no (Marketo/NetSuite were in OS 6.x (unverified)) | yes | yes | Mostly TCK, Feature Manager updates |
+| Microsoft Dynamics CRM/365 | yes (7.x OS palette) (unverified) | yes | yes | |
+| SugarCRM, vtiger, Openbravo, Centric (legacy) | yes | yes | yes | deprecated |
+| SAP (all) | no | yes (DI Platform / Data Fabric; SAP add-on licensing historically) | yes | RFC Server + JCo from SAP |
+| MongoDB, Cassandra, Neo4j, CouchDB, Redis (Standard) | yes | yes | yes | Couchbase, MarkLogic, Elasticsearch Standard: subscription / Big Data (MarkLogic doc: "products with Big Data and Data Fabric") |
+| HBase, Hive, HDFS, HCatalog, Sqoop, Impala, Spark, MapReduce | no | no | yes | big-data-spark.md |
+| Kafka (Standard), JMS, MOM, MQTT (Route) | Kafka Standard yes (unverified), JMS/MOM yes | yes | yes | Kafka Spark Streaming: Big Data |
+| FTP/SFTP/FTPS, SCP, SSH, HTTP, tRESTClient, tSOAP, tWebService, Mail, Socket, LDAP, XML, Proxy, Keystore | yes | yes | yes | tHTTPClient (TCK, 8.0) subscription (unverified) |
+| Jasper, Palo, SPSS | yes (7.x) | yes (7.x) | yes (7.x) | removed/deprecated 8.0 (Palo, SPSS) |
+| tDataprepRun, tDataset*, tDataStewardship*, tMDM*, DQ components | no | Data Prep/Stewardship: Cloud or Data Fabric; MDM: MDM Platform | Data Fabric | data-quality-governance.md |
+| tHMap / Data Mapper | no | DI Platform / Data Fabric (feature "Data Mapper") | yes | |
+| ESB c* Routes, tESB*, tREST* services | no (Open Studio for ESB separate, discontinued) | ESB / Data Services Platform | Data Fabric | esb-routes-services.md |
+| Pipeline Designer connectors (SharePoint? no), Qlik Talend Cloud SaaS connectors (Hubspot, Shopify, Stripe, Google Sheets, Microsoft Dynamics 365 CRM, Workday Reports...) | n/a | n/a | n/a | Cloud-only; not Studio components |
+
+## Deprecated and removed connectors
+
+Studio shows deprecated components under a `(deprecated)` suffix in the palette only when
+`Window > Preferences > Talend > Palette Settings > Show deprecated components` (unverified
+label) is enabled; existing Jobs keep working. Removed = not on the 8.0 palette and the Job
+import marks them unknown. Release notes: "Data Integration deprecated and removed items" and
+"R20YY-MM Studio deprecated and removed items" pages on help.qlik.com.
+
+| Connector / family | Status | Replacement |
+| --- | --- | --- |
+| tREST | deprecated (6.x), still shipped 8.0 | tRESTClient, tHTTPClient (8.0 recommended) |
+| tWebServiceInput | deprecated | tWebService, tSOAP + tXMLMap |
+| tHttpRequest | superseded (not formally deprecated, unverified) | tHTTPClient |
+| tFileFetch | kept | tHTTPClient `Download file` for API cases |
+| tNetsuiteConnection/Input/Output (lower-case s, API 2014.2/2016.2) | deprecated 7.1, pages titled `(deprecated)` in 8.0 | tNetSuiteConnection/Input/Output (`Version = Netsuite SOAP`, 2019/2021/2025) |
+| tNetSuiteV2019* | renamed | folded into tNetSuite* from 8.0.1-R2023-02 |
+| tMarketo* SOAP mode | removed | REST mode |
+| tSAPIDocInput | deprecated (7.2 doc) | tSAPIDocReceiver (listener) / tSAPIDocOutput |
+| tSAPBWInput, tSAPInfoCubeInput (classic) | legacy | tSAPODPInput, tSAPADSOInput |
+| tAzureSqlDWH* | renamed | tAzureSynapse* |
+| tGoogleAnalyticsInput (UA v3) | deprecated/removed with UA EOL 2023 | tHTTPClient against GA4 Data API |
+| tPalo* (Jedox) | deprecated 7.x, removed 8.0 (unverified) | tHTTPClient (Jedox REST) |
+| tSPSS* | deprecated 7.x, removed 8.0 (unverified) | CSV export / tSystem + Python |
+| tAlfresco* (tAlfrescoOutput) | removed 7.x | CMIS via tHTTPClient / Route cCMIS (removed too) |
+| tOpenbravoERP*, tCentricCRM*, tMSAX*, tMicrosoftMQ* | deprecated / removed 8.0 (unverified) | tHTTPClient / OData |
+| tRiak* | removed | none |
+| tCassandra* `DB Version = 2.0` (Thrift `API type`) | deprecated | CQL3 versions |
+| tNeo4j* 2.x embedded | legacy | Bolt 3.x/4.x |
+| tMongoDB* `DB Version` 2.x/3.0 drivers | removed in 8.0 R-updates (unverified) | 4.x driver versions |
+| Pig family (tPigLoad, tPigMap, tPigStoreResult...) | removed 8.0 | Spark Batch Jobs (big-data-spark.md) |
+| MapReduce Jobs and `tMahout*`, `tGenKey`/`tMatchGroup`/`tStandardizeRow` MapReduce variants | removed 8.0 | Spark Batch |
+| tBlockedFuzzyJoin, tFuzzyJoin | removed R2024-05 | tRecordMatching |
+| tClassify, tClassifySVM, tPredictCluster | removed 8.0 | tPredict |
+| tMatchIndex, tMatchIndexPredict | removed R2025-07 | tMatchGroup / tRecordMatching |
+| tNLPPreprocessing, tNLPModel, tNLPPredict, tCompareColumns (Spark) | removed 8.0 | none |
+| Bonita BPM integration (project-level) | removed 8.0; tBonitaDeploy / tBonitaInstantiateProcess components unaffected (Feature Manager) | |
+| Talend ESB Open Studio, Open Studio for DI/BD | discontinued Jan 2024 | subscription Studio 8 / Qlik Talend Cloud |
+| tHDFS*/tHive* "Custom" unsupported distributions (CDH 5, HDP 2.x, MapR) | removed per big data release notes | CDP, EMR 6, Dataproc, Databricks |
+| tRESTClient `Use Service Registry`/`Use Authorization` (ESB infra) | deprecated with ESB Registry EOL (unverified) | plain auth |
+
+## Gotchas
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| tSalesforce* fails with `INVALID_SESSION_ID: Session expired or invalid` mid-Job | Session reused across a long Job after Salesforce session timeout, or `Use or save the connection session` reused a stale token file; also happens when the API version in `Salesforce URL` and `API version` disagree | Open the connection per subjob (tSalesforceConnection + tSalesforceClose), raise the org session timeout, delete the saved session file, align URL `/services/Soap/u/<ver>` with `API version` |
+| tSalesforceInput Bulk/BulkV2 returns `Bad Request` or `Number of records should be less than or equal to 10001` while `Query` works | Connection not configured for bulk, Bulk unsupported for relationship subqueries / compound fields, or CSV result batch exceeds parser limit | Use `Query` mode for relationship queries, or BulkV2 with a flat SOQL; pair a bulk-enabled connection with Bulk mode; split by date ranges (no PK chunking support) |
+| Salesforce `REQUEST_LIMIT_EXCEEDED` / `TotalRequests Limit exceeded` | Per-row SOAP calls (Extend Insert off) or many small batches hit the 24h API call quota | Enable `Extend Insert` (200 rows per call), use Bulk API for >50k rows, check `Company Information > API Requests` |
+| Salesforce datetime fields shift by hours | Salesforce returns UTC ISO datetimes; Studio converts to the JVM timezone (`Convert date to local`/`Use Date Pattern` settings) and tSalesforceOutput sends local time without zone | Run Jobs with `-Duser.timezone=UTC`, or keep datetimes as String with pattern `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'` |
+| tSalesforceOutput never exposes `Retrieve Insert Id` / no `salesforce_id` column | Option is only available when `Extend Insert` is unchecked (8.0 doc wording "Extended Output" in older versions) | Uncheck `Extend Insert` (accept per-row calls) or use tSalesforceBulkExec whose Main output already has `salesforce_id` |
+| tSnowflakeOutputBulkExec: `Access Denied (Status Code: 403)` or `Failure using stage area` on S3 storage | Stage keys lack `s3:PutObject`/`GetObject`/`ListBucket` on the bucket+prefix, or bucket region differs from the `Region` field; KMS-encrypted bucket without `kms:Decrypt` | Grant the policy, set `Region` to the bucket's region, or switch `Storage = Internal` (no cloud credentials, Snowflake-managed stage) |
+| Snowflake load silently loads 0 rows / `COPY` reports `LOAD_SKIPPED` | File already loaded once (COPY dedup by file name/MD5 within 64 days) when `Delete Storage Files On Success` is off or `Stage Folder` reused | Add `FORCE=TRUE` in `Copy Command Options` or purge/unique-name staged files |
+| Snowflake key-pair auth: `JWT token is invalid` / `Private key provided is invalid or not supported` | Key not PKCS8 (`BEGIN RSA PRIVATE KEY` instead of `BEGIN PRIVATE KEY`), encrypted key with empty passphrase, or public key not set on the user, or account identifier mismatch (locator vs `org-account`) | `openssl pkcs8 -topk8 -inform PEM -nocrypt`, `ALTER USER x SET RSA_PUBLIC_KEY='MII...'`, use full account identifier, sync server clocks |
+| tS3Put/tS3Get `The authorization header is malformed; the region 'us-east-1' is wrong; expecting 'eu-west-1'` or `SignatureDoesNotMatch` | `Region` left default; S3-compatible endpoint needs path-style; clock skew > 15 min | Set `Region` to the bucket region; for MinIO/Ceph enable `Use path-style access` and custom `Endpoint`; NTP sync the host |
+| tS3Connection `Inherit credentials from AWS role` works on EC2 but fails in Studio (`Unable to load credentials from service endpoint`) | Instance metadata exists only on AWS compute | Use `Profile`/static keys locally via `context`, role in production; or `Assume Role` with a regional STS endpoint from inside the VPC |
+| tRedshiftBulkExec: `S3ServiceException: Access Denied` or `The specified S3 prefix does not exist` though tRedshiftOutputBulk uploaded fine | COPY runs with the cluster's credentials (IAM role / keys passed in COPY), not the component's upload keys; cross-region bucket without `REGION` | Attach an IAM role to the cluster and reference it, or pass the same keys; set `Region` on the bulk component; check `stl_load_errors` for row-level errors |
+| tAzureStorage* `AuthenticationFailed: Server failed to authenticate the request... Signature not valid in the specified time frame` | SAS token expired or start time in the future (clock skew), or SAS scoped to a different service (blob vs file) / `sr=` resource type | Regenerate SAS with `st` a few minutes in the past, matching service (`ss=b`), permissions `rwdlac`; or switch to Azure AD/managed identity |
+| tAzureAdlsGen2* `AuthorizationPermissionMismatch` with a valid service principal | SP has only RBAC Reader or no ACLs on the filesystem path (ADLS Gen2 needs `Storage Blob Data Contributor` or POSIX ACLs on each folder level) | Assign `Storage Blob Data Contributor` on the account/container or set ACLs (`--x` on parents, `rwx` on target) |
+| tBigQueryInput `Not found: Dataset project:dataset was not found in location US` | `Location`/`Dataset location` not set to the dataset's region (EU, europe-west2...) | Set the location field to match; BigQuery jobs are region-scoped |
+| tBigQueryOutput `Access Denied: ... storage.objects.create` or `Not found: URI gs://bucket/dir/file.csv` | Service account lacks Storage Object Admin on the staging bucket; file path placed in a subfolder while the component expects it directly under the bucket root (7.2 doc) | Grant bucket IAM, write to `gs://bucket/file.csv`, also grant `bigquery.jobs.create` + `bigquery.dataEditor` on the dataset |
+| Google components: `invalid_grant` / `unauthorized_client` for a service account on Drive / GA | Domain-wide delegation not configured or wrong OAuth scopes; Drive files not shared with the service account email | Share the folder with the SA email or enable domain-wide delegation with the exact scopes; use Shared Drives |
+| Google API `403 Quota exceeded for quota metric 'Queries' and limit 'Queries per day'` | Project-level API quota (Drive 1,000 requests/100 s/user, BigQuery 1,500 table ops/day) hit by row-by-row components | Batch via bulk components, add `tSleep`, request quota increase, avoid per-row `tGoogleDriveList` |
+| tKafkaInput re-reads all messages or skips messages after a Job restart | Offsets auto-committed before processing (at-most-once) or never committed (`Auto-commit` off without tKafkaCommit); `Reset offsets on consumer group` left checked from testing | Use `Auto-commit offsets` off + tKafkaCommit after the subjob (at-least-once), make processing idempotent, uncheck reset in production; new groups honour `New consumer group starts from` only when no committed offset exists |
+| tKafkaInput Job never ends | Consumer loops forever by design | Set `Stop after a maximum number of messages` / `maximum total duration` / `time without receiving a message`, or run as a long-lived service on a Remote Engine |
+| Kafka SASL_SSL: `Failed to construct kafka consumer... Could not find a 'KafkaClient' entry in the JAAS configuration` | JAAS file not passed to the JVM or `sasl.jaas.config` missing from the properties table | Add `sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="k" password="s";` in `Consumer/Producer properties` (quotes escaped in Java mode) or `-Djava.security.auth.login.config` |
+| tJMSInput `javax.naming.NoInitialContextException` / `ClassNotFoundException: org.apache.activemq.jndi.ActiveMQInitialContextFactory` | Provider client jar missing from the Job classpath (Studio only downloads some ActiveMQ versions) or version mismatch with the broker | Add the exact client jar (activemq-client x.y, `com.ibm.mq.allclient` + `javax.jms-api`, artemis-jms-client) with tLibraryLoad / Modules; make sure the build server Nexus has it |
+| tMomInput against IBM MQ: `MQJE001: Completion Code '2', Reason '2035'` (NOT_AUTHORIZED) or `2059` (QMGR_NOT_AVAILABLE) | Channel auth (CHLAUTH) blocking the OS user, wrong `Channel` (default `DC.SVRCONN`), wrong port/queue manager | Set the MCAUSER/CHLAUTH rule, correct `QueueManager`/`Channel`/`Port` 1414, confirm `MQSERVER` connectivity with `amqsputc` |
+| tFTPGet/tFTPFileList hang or `Connection timed out` after login | Active mode behind NAT/firewall; data channel blocked; FTPS data-channel session resumption on Java 17 | Set `Connection Mode = Passive`; for FTPS on Java 17 force `TLSv1.2` + the JVM props from the 8.0 tFTPConnection doc; open the passive port range on the server |
+| tFTPGet downloads files with mangled accents in names / `File not found` for non-ASCII names | FTP control-channel `Encoding` default ISO-8859-1 vs server UTF-8 | Set `Encoding = UTF-8` on tFTPConnection; for SFTP set `-Dfile.encoding` / `Use Perl5 Regex` masks carefully |
+| SFTP `Auth fail` with a key that works in OpenSSH | OpenSSH new-format or ed25519 key unsupported by the bundled JSch, or passphrase-protected key with `Password` method | Convert `ssh-keygen -p -m PEM -f id_rsa`, use RSA 2048/4096, choose `Public key` method with `Key Passphrase`; upgrade Studio (newer JSch fork in 8.0 R-updates) |
+| tRESTClient `body` output is a String when the Job expects a Document (tXMLMap input error `Document expected`) or vice versa | `Accept Type = ANY` always yields String; Document only when `Convert Response To DOM Document` (Advanced) is checked and the response is XML; JSON is converted to XML only with the JSON-to-XML option | Set `Accept Type` to XML/JSON, tick `Convert Response To DOM Document` for tXMLMap, otherwise parse `string` with tExtractJSONFields |
+| tRESTClient / tHTTPClient `401` right after a long run though the first calls worked | OAuth2 access token expired (typically 1h); tRESTClient Bearer token is static | Use tHTTPClient OAuth 2.0 client credentials (auto-refresh) or refresh in a tJavaRow / tRESTClient token call stored in `globalMap` and re-fetched every N minutes |
+| tHTTPClient `Die on error` stops the Job on 404 that is expected (lookup miss) | Default dies on >= 400 | Uncheck `Die on error` and branch on the `status`/`responseCode` column |
+| SAP components: `java.lang.ExceptionInInitializerError: JCo initialization failed with java.lang.UnsatisfiedLinkError: no sapjco3 in java.library.path` | Only `sapjco3.jar` installed; native `libsapjco3.so`/`sapjco3.dll` missing or wrong arch/glibc, or the jar was renamed (JCo refuses renamed jars) | Put the native lib next to the jar on `java.library.path` (Studio: `-Djava.library.path=` in `.ini`; JobServer/Remote Engine: `LD_LIBRARY_PATH`/`PATH`), keep the file name `sapjco3.jar`, use JCo 3.1.x matching the JDK |
+| tSAPTableInput truncates rows / `DATA_BUFFER_EXCEEDED` | Classic `RFC_READ_TABLE` 512-byte row limit when the Talend ABAP transport / RFC Server is not used | Install the Talend SAP transport and use the RFC Server streaming mode, or select fewer fields |
+| tMicrosoftCrm* ONLINE `AADSTS7000218: The request body must contain the following parameter: 'client_assertion' or 'client_secret'` | App registered as Web App (confidential) but `Registered application type = Native App` (no secret) or secret empty | Choose `Web App with delegated permissions` + `Client Secret`, or set the app as public client in Azure AD; grant `Dynamics CRM user_impersonation` and admin consent |
+| tMarketo* `606 Max rate limit '100' exceeded with in '20' secs` / `607 Daily quota reached` | REST limits per instance; parallel subjobs or tiny batches | Set `Batch Size` 300, serialize Marketo subjobs, enable `Max reconnection attempts` + `Attempt interval time`, use tMarketoBulkExec for loads |
+| tNetSuite* `WS_REQUEST_BLOCKED: Only one request may be made against a session at a time` / `EXCEEDED_CONCURRENCY_LIMIT` | SuiteTalk concurrency governance (1 per account by default; SuiteCloud Plus adds 10 per license) hit by parallel tRunJob/tParallelize | Serialize NetSuite subjobs, share one tNetSuiteConnection, buy SuiteCloud Plus, lower `Page size` churn |
+| tNetSuiteInput custom fields come back null / not in schema | `Use custom fields` not enabled or schema guessed before custom fields were added; `Body fields only` hides sublists | Tick the custom-field option, re-`Guess schema`, uncheck `Body fields only` when sublists are needed |
+| tMongoDBOutput Upsert creates duplicates instead of updating | Key column not flagged in `Query`/keys and not present in `Mapping`, or `_id` typed as String while stored as ObjectId | Mark the key column, keep `_id` consistent (String column named `_id` converts to ObjectId only when valid 24-hex), use `Upsert with set` with `Updatable` columns |
+| tMongoDBConnection to Atlas: `Timed out after 30000 ms while waiting to connect` / `MongoSocketReadException` | `mongodb+srv` seedlist unsupported in old driver versions; TLS required; IP not allow-listed | Choose a 4.x driver `DB Version`, `Use SSL`, list replica hosts explicitly or use the connection-string option; allow-list the engine IP |
+| tNeo4jOutput `NoSuchMethodError` / `ClassCastException` in a Job that also has tNeo4jInput | Mixed `DB Version` 2.x and 3.x in the same Job (doc warning), or 3.2.x server (unsupported) | Use one driver version per Job; split into child Jobs if needed |
+| tCassandraOutput `InvalidQueryException: Batch too large` / timeouts | Logged batch with many partitions exceeding `batch_size_fail_threshold_in_kb` | Lower `Batch size`, use `unlogged batch`, insert without batch for cross-partition data |
+| tElasticSearchOutput `mapper_parsing_exception` / `Rejecting mapping update ... as the final mapping would have more than 1 type` | `Type` set on ES 7+/8 which dropped mapping types; dates sent as Strings not matching the index format | Leave type `_doc` / blank, set explicit mappings or send ISO-8601 Strings |
+| tCouchbase* ignore tSetProxy and fail from a proxied network | Couchbase SDK has no proxy support (doc note) | Open direct network access (8091-8096, 11210, 18091+ with TLS) or run on an engine inside the VPC |
+| tLDAPInput returns only 1000 entries from Active Directory | AD `MaxPageSize` 1000 without paging | Enable paging (`Page size` <= 1000) on tLDAPInput (7.x+) or filter/segment by OU |
+| tLDAPOutput to AD `LDAP: error code 53 - 0000001F: SvcErr: DSID-031A12D2, problem 5003 (WILL_NOT_PERFORM)` on password set | `unicodePwd` requires LDAPS and a UTF-16LE quoted value | Use `Protocol = LDAPS` with trusted cert (tSetKeystore) and set the value via tJavaRow as `"\"" + pwd + "\""` encoded UTF-16LE (byte[] attribute) |
+| tSendMail `javax.mail.AuthenticationFailedException` / `535 5.7.3 Authentication unsuccessful` on Office 365, or `Could not convert socket to TLS` on port 587 | Basic SMTP auth disabled by Microsoft; `SSL support` (implicit TLS) used on the STARTTLS port 587 | Use 465 + `SSL support` where offered, or 587 with STARTTLS option; for M365 use Graph `sendMail` via tHTTPClient with OAuth2 or an authenticated relay/SMTP AUTH-enabled mailbox with an app password |
+| tSendMail silently sends without attachment | `Die if the attachment file doesn't exist` unchecked | Re-check it, or test with tFileExist upstream |
+| Proxy configured in Studio Preferences but Job still cannot reach the Internet | Studio's Eclipse proxy applies to Studio only, not to the Job JVM | Add tSetProxy at Job start or JVM args `-Dhttps.proxyHost/-Dhttps.proxyPort/-Dhttp.nonProxyHosts` in Run > Advanced settings / TAC task / engine `JAVA_OPTS`; for authenticated HTTPS proxies add `-Djdk.http.auth.tunneling.disabledSchemes=` |
+| tSetKeystore has no effect for one component (`PKIX path building failed`) | Component uses its own HTTP stack/truststore (e.g. Snowflake JDBC `-Djavax.net.ssl.trustStore` must be set before driver load; Couchbase/Mongo drivers use their own `Use SSL` + truststore params) | Put tSetKeystore in the very first subjob (tPrejob), or import the CA into the JRE `cacerts` of every runtime (Studio JRE, JobServer, Remote Engine) |
+| TCK connector shows as red/unknown component after importing a Job or after Studio update | Job built with a newer connector version (car) than installed; feature not activated for this project; missing R-update | `Help > Feature Manager` install/activate the feature in this project, apply the same monthly update as the source Studio, check `Modules` for missing jars |
+| "Install missing modules" dialog keeps returning at every Job open | Jars Studio cannot download (sapjco3, IBM MQ, Oracle ojdbc in some builds, Teradata, Neo4j 3.x bundles) | Install manually once via the dialog's browse button; for CI put them in Nexus `talend-custom-libs-release`/`talend-custom-libs-snapshot`; set `Window > Preferences > Talend > Performance > Check the modules` (unverified) |
+| Pure-password field shows `Unknown variable` or literal `context.pwd` sent to the server | Field in "pure password" mode holds a literal, Java mode expects an expression | Toggle the field mode (8.0.1-R2022-05+ eye/mode icon) to match; keep secrets in `context` with Java mode |
+| tDeltaLakeInput `Log4j2 conflict` / `java.lang.NoSuchMethodError` from Arrow | Databricks JDBC bundles Arrow + log4j shading clashes with Studio log4j2 | Append `;EnableArrow=0` to the JDBC URL (8.0 doc) |
+| tDeltaLake* `No suitable driver found for jdbc:spark://` after 8.0.1-R2023-05 | Driver switched to `com.databricks.client.jdbc.Driver`, URL scheme must be `jdbc:databricks://` | Edit the JDBC URL in every Job/context (doc note: existing Jobs need manual update) |
+| tAzureSynapseBulkExec `COPY INTO` fails `Not able to validate external location` | Synapse workspace managed identity lacks `Storage Blob Data Contributor` on the staging account, or firewall blocks Azure services | Grant the role to the workspace MSI, allow trusted Microsoft services, or use SAS auth in the COPY credential |
+| tHMap `Exception threshold reached` / map runs but output structure empty | Representation mismatch (CSV structure with wrong delimiter/encoding) or loop not mapped (`Loop` function missing on the output repeating element) | Open the map, run with sample data (`Test Run`), add `Loop` on the output element, check `Input representation` properties |
+
+## Sources
+
+https://help.qlik.com/talend/en-US/components/8.0/salesforce/tsalesforceinput
+https://help.qlik.com/talend/en-US/components/8.0/salesforce/tsalesforceoutputbulk
+https://help.qlik.com/talend/r/en-US/7.3/components/salesforce/tsalesforceoutput
+https://help.qlik.com/talend/en-US/components/7.3/salesforce/tsalesforceoutputbulk-standard-properties
+https://community.qlik.com/t5/Talend-Studio/bulk-and-bulkv2-options-not-working-in-tSalesforceInput/m-p/2336169/highlight/true
+https://community.qlik.com/t5/Talend-Studio/resolved-tSalesforceInput-PK-or-Autonumber-chunking/td-p/2325100
+https://community.qlik.com/t5/Talend-Studio/Bulk-Query-mode-not-working-in-tSalesforce-Input/m-p/2320930/highlight/true
+https://community.qlik.com/t5/Talend-Studio/Can-not-retrieve-Salesforce-ID-while-using-tSalesforceOutput/td-p/2321578
+https://community.qlik.com/t5/Talend-Studio/Problem-with-tsalesforceoutput-main-reject-flow-when-Commit/m-p/2368857/highlight/true
+https://help.qlik.com/talend/en-US/components/8.0/snowflake/tsnowflakeoutputbulk
+https://help.qlik.com/talend/en-US/components/8.0/snowflake/tsnowflakeoutputbulkexec
+https://help.qlik.com/talend/en-US/components/8.0/snowflake/tsnowflakebulkexec
+https://help.qlik.com/talend/en-US/components/7.3/snowflake/tsnowflakeoutputbulk-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/snowflake/tsnowflakeoutputbulkexec-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/amazon-s3/ts3connection
+https://help.qlik.com/talend/en-US/components/7.3/amazon-s3/ts3connection-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/amazon-s3/ts3get-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/amazon-s3/ts3put-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/amazon-s3/ts3copy-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/amazon-s3/ts3list
+https://help.qlik.com/talend/en-US/components/8.0/amazon-redshift/tredshiftoutputbulk
+https://help.qlik.com/talend/en-US/components/8.0/amazon-redshift/tredshiftoutputbulkexec
+https://help.qlik.com/talend/en-US/components/8.0/amazon-redshift/tredshiftbulkexec
+https://help.qlik.com/talend/en-US/components/7.3/amazon-redshift/amazon-redshift-component
+https://help.qlik.com/talend/en-US/components/8.0/google-bigquery/tbigqueryoutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/google-bigquery/tbigqueryoutput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/google-bigquery/tbigquerybulkexec
+https://help.qlik.com/talend/en-US/components/7.2/google-bigquery/tbigqueryinput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/google-bigquery/tbigquerysqlrow
+https://help.qlik.com/talend/en-US/components/8.0/google-bigtable/tbigtableoutput
+https://help.qlik.com/talend/en-US/components/8.0/azure-storage-blob/tazurestorageconnection
+https://help.qlik.com/talend/en-US/components/8.0/azure-storage-queue/tazurestorageconnection
+https://help.qlik.com/talend/en-US/components/8.0/azure-storage-table/tazurestorageconnection
+https://help.qlik.com/talend/en-US/components/7.3/azure-storage-blob/tazurestorageconnection-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/azure-storage-table/tazurestorageinputtable-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/azure-storage-blob/tazurestoragecontainerlist
+https://help.qlik.com/talend/en-US/components/8.0/azure-data-lake-storage-gen2/tazureadlsgen2connection
+https://help.qlik.com/talend/en-US/components/8.0/azure-data-lake-storage-gen2/tazureadlsgen2input
+https://help.qlik.com/talend/en-US/components/7.3/azure-data-lake-storage-gen2/tazureadlsgen2output-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/azure-data-lake-storage-gen2/tazureadlsgen2put
+https://help.qlik.com/talend/en-US/components/8.0/azure-data-lake-storage-gen2/tazureadlsgen2delete
+https://help.qlik.com/talend/en-US/components/8.0/mongodb/tmongodboutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/mongodb/tmongodboutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/mongodb/tmongodboutput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/mongodb/tmongodbinput-tmongodboutput-tlogrow-upserting-data-to-mongodb-standard-component-bigdata
+https://help.qlik.com/talend/en-US/components/7.2/cosmosdb/tcosmosdboutput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/kafka/tkafkainput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/kafka/tkafkainput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/mediation-kafka/ckafka
+https://help.qlik.com/talend/en-US/components/7.3/kafka/tkafkainputavro-properties-for-apache-spark-streaming
+https://help.qlik.com/talend/en-US/job-script-reference-guide/8.0/component-specific-settings-for-tkafkainput
+https://help.qlik.com/talend/en-US/components/8.0/esb-rest/trestclient
+https://help.qlik.com/talend/en-US/components/7.3/esb-rest/trestclient-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/esb-rest/trestclient-txmlmap-tlogrow-tlogrow-configuring-service-call-standard-component
+https://help.qlik.com/talend/en-US/components/8.0/http/thttpclient
+https://help.qlik.com/talend/en-US/components/7.3/rest/trest-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/ftp/tftpconnection
+https://help.qlik.com/talend/en-US/components/7.3/ftp/tftpconnection-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/ftp/tftpfileproperties
+https://help.qlik.com/talend/en-US/components/8.0/ftp/tftpput
+https://help.qlik.com/talend/en-US/components/8.0/ftp/tftpget
+https://help.qlik.com/talend/en-US/components/8.0/ftp/tftpdelete
+https://help.qlik.com/talend/en-US/components/7.3/ftp/tftptruncate-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/sap/sap-component
+https://help.qlik.com/talend/en-US/components/8.0/sap/tsaptableinput
+https://help.qlik.com/talend/en-US/components/7.3/sap/sap-component
+https://help.qlik.com/talend/en-US/components/7.3/sap/tsaptableinput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/sap/sap-component
+https://help.qlik.com/talend/en-US/release-notes/8.0/r2025-07-studio-deprecated-and-removed-items
+https://help.qlik.com/talend/en-US/release-notes/8.0/data-integration-deprecated-and-removed-items
+https://help.qlik.com/talend/en-US/release-notes/8.0/data-quality-deprecated-and-removed-items
+https://help.qlik.com/talend/en-US/release-notes/8.0/r2024-05-deprecated-and-removed-features-data-quality
+https://help.qlik.com/talend/en-US/release-notes/8.0/r2023-01-deprecated-and-removed-features-data-quality
+https://help.qlik.com/talend/r/en-US/8.0/studio-user-guide/install-features-to-talend-studio
+https://help.qlik.com/talend/en-US/studio-user-guide/8.0-R2025-10/install-features-to-talend-studio
+https://jira.talendforge.org/browse/TCOMP-2443
+https://help.qlik.com/talend/en-US/components/8.0/netsuite/tnetsuitev2019input
+https://help.qlik.com/talend/en-US/components/8.0/netsuite/tnetsuitev2019connection
+https://help.qlik.com/talend/en-US/components/7.3/netsuite/tnetsuitev2019input-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/netsuite/tnetsuiteinput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/netsuite/tnetsuiteinput-deprecated
+https://help.qlik.com/talend/en-US/connectors-guide/Cloud/connector-netsuite
+https://help.qlik.com/talend/en-US/components/7.3/marketo/marketo
+https://help.qlik.com/talend/en-US/components/7.2/marketo/marketo-component
+https://help.qlik.com/talend/en-US/components/7.3/marketo/tmarketoinput-tmarketoconnection-tlogrow-connecting-to-marketo-using-rest-api-before
+https://help.qlik.com/talend/en-US/components/8.0/marketo/tmarketocampaign
+https://help.qlik.com/talend/ja-JP/studio-user-guide/8.0-R2024-05/centralizing-marketo-metadata
+https://help.qlik.com/talend/en-US/components/8.0/workday/tworkdayinput
+https://help.qlik.com/talend/en-US/components/7.3/workday/tworkdayinput-standard-properties
+https://help.qlik.com/en-US/cloud-services/Subsystems/Hub/Content/Sense_Hub/DataIntegration/WebApplications/Connecting-Workday-Reports.htm
+https://help.qlik.com/talend/r/en-US/8.0/components/microsoft-crm/tmicrosoftcrmoutput
+https://help.qlik.com/talend/en-US/microsoft-crm/8.0/tmicrosoftcrminput
+https://help.qlik.com/talend/en-US/components/7.3/microsoft-crm/tmicrosoftcrmoutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/microsoft-crm/tmicrosoftcrminput-standard-properties
+https://community.qlik.com/t5/Talend-Studio/What-is-Security-Service-URL-in-tMicrosoftcrmOutput-component/m-p/2281336/highlight/true
+https://community.qlik.com/t5/Design-and-Development/Connecting-to-Dynamics-365/m-p/2377798/highlight/true
+https://help.qlik.com/en-US/cloud-services/Subsystems/Hub/Content/Sense_Hub/DataIntegration/WebApplications/Connecting-MicrosoftDynamics365-v2.htm
+https://help.qlik.com/talend/en-US/components/8.0/mail/tsendmail
+https://help.qlik.com/talend/en-US/components/7.3/mail/tsendmail-standard-properties
+https://community.qlik.com/t5/Talend-Studio/resolved-Error-on-tSendMail/td-p/2363758
+https://community.qlik.com/t5/Talend-Studio/tSendMail-component-issue/td-p/2349552
+https://help.qlik.com/talend/en-US/components/8.0/mom/tmomoutput
+https://help.qlik.com/talend/en-US/components/8.0/mom/tmominput
+https://help.qlik.com/talend/en-US/components/8.0/mom/tmomconnection
+https://help.qlik.com/talend/en-US/components/7.3/mom/tmominput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/mom/tmessagingoutput
+https://help.qlik.com/talend/en-US/components/8.0/mom/tmessaginginput
+https://help.qlik.com/talend/en-US/components/8.0/mediation-jms/cmqconnectionfactory
+https://help.qlik.com/talend/en-US/components/8.0/mediation-wmq/cmqconnectionfactory
+https://help.qlik.com/talend/en-US/components/8.0/dbfs/tdbfsput
+https://help.qlik.com/talend/en-US/components/8.0/dbfs/tdbfsconnection
+https://help.qlik.com/talend/en-US/components/7.3/databricks/tdbfsput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/databricks/tdbfsget-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/delta-lake/tdeltalakeinput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/data-mapping/thmap
+https://help.qlik.com/talend/en-US/components/8.0/data-mapping/thmapinput
+https://help.qlik.com/talend/en-US/components/7.2/data-mapping/thmap-tfileinputdelimited-tfileoutputxml-tfileoutputxml-defining-properties-of-thmap-standard-component-enterprise-select
+https://help.qlik.com/talend/en-US/components/8.0/data-preparation/tdatapreprun
+https://help.qlik.com/talend/en-US/components/8.0/data-preparation/tdatasetinput
+https://help.qlik.com/talend/en-US/components/8.0/data-preparation/tdatasetoutput
+https://help.qlik.com/talend/en-US/components/8.0/data-preparation/data-preparation-component
+https://help.qlik.com/talend/en-US/data-preparation-user-guide/Cloud/talend-cloud-data-preparation-architecture-beta
+https://help.qlik.com/talend/en-US/components/8.0/proxy/tsetproxy
+https://help.qlik.com/talend/en-US/components/7.3/proxy/tsetproxy-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/keystore/tsetkeystore-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/keystore/tsetkeystore-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/library-import/tlibraryload-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/ldap/tldapinput
+https://help.qlik.com/talend/en-US/components/8.0/ldap/tldapoutput
+https://help.qlik.com/talend/en-US/components/8.0/ldap/tldapattributesinput
+https://help.qlik.com/talend/en-US/components/8.0/ldap/tldaprenameentry
+https://help.qlik.com/talend/en-US/components/7.3/ldap/tldapinput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/ldap/tldapinput-tldapoutput-tmap-tlogrow-configuring-components-standard-component-in
+https://help.qlik.com/talend/en-US/components/8.0/couchbase/tcouchbaseoutput
+https://help.qlik.com/talend/en-US/components/8.0/cassandra/tcassandraoutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/cassandra/tcassandraoutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/neo4j/tneo4joutput-standard-properties
+https://help.qlik.com/talend/en-US/components/7.2/marklogic/tmarklogicoutput-standard-properties
+https://help.qlik.com/talend/en-US/components/8.0/google-drive/tgoogledriveconnection
+https://help.qlik.com/talend/en-US/components/8.0/google-drive/tgoogledriveget
+https://help.qlik.com/talend/en-US/components/8.0/google-drive/tgoogledriveput
+https://help.qlik.com/talend/en-US/components/7.2/google-drive/tgoogledriveconnection-standard-properties
+https://help.qlik.com/talend/en-US/components/7.3/google-drive/tgoogledriveput-standard-properties

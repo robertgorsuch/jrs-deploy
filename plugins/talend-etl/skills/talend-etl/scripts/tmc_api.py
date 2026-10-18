@@ -15,21 +15,23 @@ Usage::
     tmc_api.py --region us tasks list --environment-id <envId> [--name "LOAD_*"]
     tmc_api.py tasks get <taskId>
     tmc_api.py tasks run-config <taskId>
+    tmc_api.py tasks history <taskId>            # recent executions of a task
     tmc_api.py tasks run <taskId> --param DB_HOST=prod --param BATCH_SIZE=5000 [--wait]
     tmc_api.py executions get <executionId>
     tmc_api.py executions wait <executionId> --poll 10 --timeout 3600
     tmc_api.py plans list --environment-id <envId>
     tmc_api.py plans run <planId> [--wait]
     tmc_api.py engines
-    tmc_api.py raw GET /executables/tasks?environmentId=...
-    tmc_api.py raw POST /executions --body '{"executable":"<taskId>"}'
+    tmc_api.py raw GET /orchestration/executables/tasks?environmentId=...
+    tmc_api.py raw POST /processing/executions --body '{"executable":"<taskId>"}'
     ... --dry-run     # print the request instead of sending it
 
 Regions: ``us`` -> api.us.cloud.talend.com, ``eu`` -> api.eu.cloud.talend.com,
 ``ap`` -> api.ap.cloud.talend.com, ``us-west`` -> api.us-west.cloud.talend.com,
 ``au`` -> api.au.cloud.talend.com; or pass ``--base-url`` for anything else
-(for example a Qlik Talend Cloud tenant endpoint). The default API version is
-``v2.6``; override with ``--api-version``.
+(for example a Qlik Talend Cloud tenant endpoint). Paths default to the current
+API families (``/orchestration/...``, ``/processing/...``); ``--legacy v2.6``
+rewrites them to the numbered ``/tmc/v2.6/...`` form for older tenants.
 
 Paths are doc-derived (references/apis-sdks.md); this build was not run
 against a live tenant. Standard library only.
@@ -62,16 +64,29 @@ class TmcError(Exception):
     pass
 
 
+FAMILIES = ("orchestration", "processing", "monitoring", "account", "security")
+
+
 class Client:
-    def __init__(self, base_url: str, token: str | None, api_version: str = "v2.6",
+    def __init__(self, base_url: str, token: str | None, legacy: str | None = None,
                  dry_run: bool = False, timeout: float = 60.0):
-        self.base = base_url.rstrip("/") + "/tmc/" + api_version
+        self.base = base_url.rstrip("/")
+        self.legacy = legacy  # e.g. "v2.6" -> /tmc/v2.6/<path without family prefix>
         self.token = token
         self.dry_run = dry_run
         self.timeout = timeout
 
+    def _path(self, path: str) -> str:
+        path = path if path.startswith("/") else "/" + path
+        if self.legacy and not path.startswith("/tmc/"):
+            parts = path.split("/", 2)
+            if len(parts) == 3 and parts[1] in FAMILIES:
+                path = "/" + parts[2]
+            path = f"/tmc/{self.legacy}" + path
+        return path
+
     def request(self, method: str, path: str, params: dict | None = None, body=None):
-        url = self.base + (path if path.startswith("/") else "/" + path)
+        url = self.base + self._path(path)
         if params:
             q = {k: v for k, v in params.items() if v not in (None, "")}
             if q:
@@ -130,7 +145,7 @@ class Client:
         start = time.time()
         last = None
         while True:
-            ex = self.request("GET", f"/executions/{execution_id}")
+            ex = self.request("GET", f"/processing/executions/{execution_id}")
             if ex is None:
                 return None
             status = ex.get("status") or ex.get("executionStatus")
@@ -163,7 +178,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--region", choices=sorted(REGIONS), default=os.environ.get("TALEND_CLOUD_REGION", "us"))
     ap.add_argument("--base-url", help="override the regional base URL")
-    ap.add_argument("--api-version", default="v2.6")
+    ap.add_argument("--legacy", metavar="vX.Y", help="use the numbered legacy prefix, e.g. v2.6 -> /tmc/v2.6/...")
     ap.add_argument("--token", default=os.environ.get("TALEND_CLOUD_TOKEN"))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--timeout", type=float, default=60.0)
@@ -179,6 +194,7 @@ def main(argv=None) -> int:
     trc = t.add_parser("run-config"); trc.add_argument("task_id")
     tr = t.add_parser("run"); tr.add_argument("task_id"); tr.add_argument("--param", action="append", default=[]); tr.add_argument("--wait", action="store_true"); tr.add_argument("--poll", type=float, default=10.0); tr.add_argument("--wait-timeout", type=float, default=3600.0)
     ts = t.add_parser("schedule"); ts.add_argument("task_id")
+    th = t.add_parser("history"); th.add_argument("task_id"); th.add_argument("--limit", type=int, default=20)
 
     e = sub.add_parser("executions").add_subparsers(dest="sub", required=True)
     eg = e.add_parser("get"); eg.add_argument("execution_id")
@@ -195,34 +211,36 @@ def main(argv=None) -> int:
 
     a = ap.parse_args(argv)
     base = a.base_url or REGIONS[a.region]
-    c = Client(base, a.token, a.api_version, a.dry_run, a.timeout)
+    c = Client(base, a.token, a.legacy, a.dry_run, a.timeout)
     try:
         if a.cmd == "environments":
-            out(c.request("GET", "/environments"))
+            out(c.request("GET", "/orchestration/environments"))
         elif a.cmd == "workspaces":
-            out(c.request("GET", "/workspaces", {"environmentId": a.environment_id}))
+            out(c.request("GET", "/orchestration/workspaces", {"environmentId": a.environment_id}))
         elif a.cmd == "engines":
-            out({"remoteEngines": c.request("GET", "/runtimes/remote-engines"),
-                 "remoteEngineClusters": c.request("GET", "/runtimes/remote-engine-clusters")})
+            out({"remoteEngines": c.request("GET", "/processing/runtimes/remote-engines"),
+                 "remoteEngineClusters": c.request("GET", "/processing/runtimes/remote-engine-clusters")})
         elif a.cmd == "tasks":
             if a.sub == "list":
-                items = c.list_all("/executables/tasks", {"environmentId": a.environment_id, "workspaceId": a.workspace_id})
+                items = c.list_all("/orchestration/executables/tasks", {"environmentId": a.environment_id, "workspaceId": a.workspace_id})
                 if a.name:
                     items = [i for i in items if fnmatch.fnmatch(i.get("name", ""), a.name)]
                 out([{k: i.get(k) for k in ("executable", "id", "name", "workspaceId", "environmentId", "artifact", "version")}
                      for i in items] if not a.dry_run else None)
             elif a.sub == "get":
-                out(c.request("GET", f"/executables/tasks/{a.task_id}"))
+                out(c.request("GET", f"/orchestration/executables/tasks/{a.task_id}"))
             elif a.sub == "run-config":
-                out(c.request("GET", f"/executables/tasks/{a.task_id}/run-config"))
+                out(c.request("GET", f"/orchestration/executables/tasks/{a.task_id}/run-config"))
             elif a.sub == "schedule":
-                out(c.request("GET", f"/executables/tasks/{a.task_id}/schedule"))
+                out(c.request("GET", f"/orchestration/executables/tasks/{a.task_id}/schedule"))
+            elif a.sub == "history":
+                out(c.request("GET", f"/processing/executables/tasks/{a.task_id}/executions", {"limit": a.limit}))
             elif a.sub == "run":
                 body = {"executable": a.task_id}
                 params = parse_params(a.param)
                 if params:
                     body["parameters"] = params
-                res = c.request("POST", "/executions", body=body)
+                res = c.request("POST", "/processing/executions", body=body)
                 out(res)
                 if a.wait and res:
                     final = c.wait(res.get("executionId") or res.get("id"), a.poll, a.wait_timeout)
@@ -230,28 +248,28 @@ def main(argv=None) -> int:
                     return 0 if (final or {}).get("status") in SUCCESS else 1
         elif a.cmd == "executions":
             if a.sub == "get":
-                out(c.request("GET", f"/executions/{a.execution_id}"))
+                out(c.request("GET", f"/processing/executions/{a.execution_id}"))
             elif a.sub == "wait":
                 final = c.wait(a.execution_id, a.poll, a.wait_timeout)
                 out(final)
                 return 0 if (final or {}).get("status") in SUCCESS else 1
             elif a.sub == "logs":
-                out(c.request("GET", f"/executions/{a.execution_id}/logs"))
+                out(c.request("GET", f"/processing/executions/{a.execution_id}/logs"))
             elif a.sub == "terminate":
-                out(c.request("POST", f"/executions/{a.execution_id}", body={"status": "TERMINATE"}))
+                out(c.request("POST", f"/processing/executions/{a.execution_id}/stop"))
         elif a.cmd == "plans":
             if a.sub == "list":
-                out(c.list_all("/executables/plans", {"environmentId": a.environment_id, "workspaceId": a.workspace_id}))
+                out(c.list_all("/orchestration/executables/plans", {"environmentId": a.environment_id, "workspaceId": a.workspace_id}))
             elif a.sub == "get":
-                out(c.request("GET", f"/executables/plans/{a.plan_id}"))
+                out(c.request("GET", f"/orchestration/executables/plans/{a.plan_id}"))
             elif a.sub == "run":
-                res = c.request("POST", "/executions/plans", body={"executable": a.plan_id})
+                res = c.request("POST", "/processing/executions/plans", body={"executable": a.plan_id})
                 out(res)
                 if a.wait and res:
                     exec_id = res.get("executionId") or res.get("id")
                     start = time.time()
                     while True:
-                        st = c.request("GET", f"/executions/plans/{exec_id}")
+                        st = c.request("GET", f"/processing/executions/plans/{exec_id}")
                         status = (st or {}).get("status")
                         print(f"[{time.strftime('%H:%M:%S')}] plan {exec_id}: {status}", file=sys.stderr)
                         if status in TERMINAL:
