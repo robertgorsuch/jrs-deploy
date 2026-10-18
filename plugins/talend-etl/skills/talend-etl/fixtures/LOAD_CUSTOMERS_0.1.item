@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<talendfile:ProcessType xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:talendfile="platform:/resource/org.talend.model/model/TalendFile.xsd" xmlns:mapper="http://www.talend.org/mapper" defaultContext="Default" jobType="Standard">
+<talendfile:ProcessType xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:talendfile="platform:/resource/org.talend.model/model/TalendFile.xsd" xmlns:TalendMapper="http://www.talend.org/mapper" defaultContext="Default" jobType="Standard">
   <context confirmationNeeded="false" name="Default">
     <contextParameter comment="" name="INPUT_DIR" prompt="INPUT_DIR?" promptNeeded="false" type="id_Directory" value="/data/in" repositoryContextId="_ctxGroup01"/>
     <contextParameter comment="" name="FILE_MASK" prompt="FILE_MASK?" promptNeeded="false" type="id_String" value="customers_*.csv" repositoryContextId="_ctxGroup01"/>
@@ -159,7 +159,7 @@
       <column comment="" key="true" length="0" name="customer_id" nullable="false" pattern="" precision="0" sourceType="" type="id_Integer" usefulColumn="true" originalLength="-1" defaultValue=""/>
       <column comment="" key="false" length="0" name="country_code" nullable="true" pattern="" precision="0" sourceType="" type="id_String" usefulColumn="true" originalLength="-1" defaultValue=""/>
     </metadata>
-    <nodeData xsi:type="mapper:MapperData">
+    <nodeData xsi:type="TalendMapper:MapperData">
       <uiProperties shellMaximized="false"/>
       <varTables sizeState="INTERMEDIATE" name="Var" minimized="false">
         <mapperTableEntries expression="StringHandling.TRIM(row1.full_name)" name="clean_name" type="id_String"/>
@@ -275,10 +275,10 @@
     <elementParameter field="CLOSED_LIST" name="PRIORITY" value="5"/>
     <elementParameter field="CHECK" name="EXIT_JVM" value="false"/>
   </node>
-  <connection connectorName="COMPONENT_OK" label="OnComponentOk" lineStyle="7" metaname="tPrejob_1" offsetLabelX="0" offsetLabelY="0" source="tPrejob_1" target="tDBConnection_1">
+  <connection connectorName="COMPONENT_OK" label="OnComponentOk" lineStyle="3" metaname="tPrejob_1" offsetLabelX="0" offsetLabelY="0" source="tPrejob_1" target="tDBConnection_1">
     <elementParameter field="TEXT" name="UNIQUE_NAME" value="OnComponentOk1"/>
   </connection>
-  <connection connectorName="ITERATE" label="Iterate" lineStyle="4" metaname="tFileList_1" offsetLabelX="0" offsetLabelY="0" source="tFileList_1" target="tFileInputDelimited_1">
+  <connection connectorName="ITERATE" label="Iterate" lineStyle="7" metaname="tFileList_1" offsetLabelX="0" offsetLabelY="0" source="tFileList_1" target="tFileInputDelimited_1">
     <elementParameter field="CHECK" name="ENABLE_PARALLEL" value="false"/>
     <elementParameter field="TEXT" name="NUMBER_PARALLEL" value="2"/>
     <elementParameter field="TEXT" name="UNIQUE_NAME" value="iterate1"/>
@@ -291,7 +291,7 @@
     <elementParameter field="CHECK" name="MONITOR_CONNECTION" value="false"/>
     <elementParameter field="TEXT" name="UNIQUE_NAME" value="rejects"/>
   </connection>
-  <connection connectorName="FLOW" label="lkp" lineStyle="1" metaname="tDBInput_1" offsetLabelX="0" offsetLabelY="0" source="tDBInput_1" target="tMap_1">
+  <connection connectorName="FLOW" label="lkp" lineStyle="8" metaname="tDBInput_1" offsetLabelX="0" offsetLabelY="0" source="tDBInput_1" target="tMap_1">
     <elementParameter field="CHECK" name="MONITOR_CONNECTION" value="false"/>
     <elementParameter field="TEXT" name="UNIQUE_NAME" value="lkp"/>
   </connection>
@@ -303,13 +303,13 @@
     <elementParameter field="CHECK" name="MONITOR_CONNECTION" value="false"/>
     <elementParameter field="TEXT" name="UNIQUE_NAME" value="out_no_country"/>
   </connection>
-  <connection connectorName="SUBJOB_OK" label="OnSubjobOk" lineStyle="9" metaname="tFileList_1" offsetLabelX="0" offsetLabelY="0" source="tFileList_1" target="tDBCommit_1">
+  <connection connectorName="SUBJOB_OK" label="OnSubjobOk" lineStyle="1" metaname="tFileList_1" offsetLabelX="0" offsetLabelY="0" source="tFileList_1" target="tDBCommit_1">
     <elementParameter field="TEXT" name="UNIQUE_NAME" value="OnSubjobOk1"/>
   </connection>
-  <connection connectorName="SUBJOB_ERROR" label="OnSubjobError" lineStyle="10" metaname="tFileList_1" offsetLabelX="0" offsetLabelY="0" source="tFileList_1" target="tDie_1">
+  <connection connectorName="SUBJOB_ERROR" label="OnSubjobError" lineStyle="4" metaname="tFileList_1" offsetLabelX="0" offsetLabelY="0" source="tFileList_1" target="tDie_1">
     <elementParameter field="TEXT" name="UNIQUE_NAME" value="OnSubjobError1"/>
   </connection>
-  <connection connectorName="COMPONENT_OK" label="OnComponentOk" lineStyle="7" metaname="tPostjob_1" offsetLabelX="0" offsetLabelY="0" source="tPostjob_1" target="tDBClose_1">
+  <connection connectorName="COMPONENT_OK" label="OnComponentOk" lineStyle="3" metaname="tPostjob_1" offsetLabelX="0" offsetLabelY="0" source="tPostjob_1" target="tDBClose_1">
     <elementParameter field="TEXT" name="UNIQUE_NAME" value="OnComponentOk2"/>
   </connection>
   <subjob>

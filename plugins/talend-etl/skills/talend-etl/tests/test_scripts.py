@@ -52,6 +52,24 @@ class InspectJobItem(unittest.TestCase):
         self.assertEqual(kinds["iterate1"], "iterate")
         self.assertEqual(kinds["OnSubjobOk1"], "trigger")
 
+    def test_linestyle_fallback_when_connector_missing(self):
+        import copy
+        import xml.etree.ElementTree as ET
+        src = open(ITEM, encoding="utf-8").read()
+        # strip connectorName so the ordinal alone must classify the links
+        stripped = src.replace('connectorName="FLOW" label="lkp"', 'label="lkp"') \
+                      .replace('connectorName="SUBJOB_OK" label="OnSubjobOk"', 'label="OnSubjobOk"') \
+                      .replace('connectorName="ITERATE" label="Iterate"', 'label="Iterate"')
+        with tempfile.NamedTemporaryFile("w", suffix=".item", delete=False, encoding="utf-8") as fh:
+            fh.write(stripped)
+        try:
+            kinds = {c["name"]: (c["kind"], c["connector"]) for c in iji.parse_item(fh.name)["connections"]}
+        finally:
+            os.unlink(fh.name)
+        self.assertEqual(kinds["lkp"], ("lookup", "LOOKUP"))
+        self.assertEqual(kinds["OnSubjobOk1"], ("trigger", "SUBJOB_OK"))
+        self.assertEqual(kinds["iterate1"], ("iterate", "ITERATE"))
+
     def test_tmap_internals(self):
         tmap = next(c for c in self.job["components"] if c["type"] == "tMap")
         m = tmap["mapper"]

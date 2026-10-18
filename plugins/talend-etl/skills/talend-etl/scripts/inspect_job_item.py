@@ -55,6 +55,8 @@ CONNECTOR_KIND = {
     "SUBJOB_ERROR": "trigger",
     "SYNCHRONIZE": "trigger",
     "PARALLELIZE": "trigger",
+    "RUN_AFTER": "trigger",
+    "STARTS": "trigger",
     "ROUTE": "route",
     "ROUTE_WHEN": "route",
     "ROUTE_OTHER": "route",
@@ -65,6 +67,7 @@ CONNECTOR_KIND = {
 }
 TRIGGER_LABEL = {
     "RUN_IF": "RunIf",
+    "RUN_AFTER": "RunAfter",
     "COMPONENT_OK": "OnComponentOk",
     "COMPONENT_ERROR": "OnComponentError",
     "SUBJOB_OK": "OnSubjobOk",
@@ -72,8 +75,22 @@ TRIGGER_LABEL = {
     "SYNCHRONIZE": "Synchronize",
     "PARALLELIZE": "Parallelize",
 }
-# lineStyle 1 is FLOW_REF (lookup) in every Studio release we know of.
-LOOKUP_LINESTYLE = "1"
+# lineStyle = ordinal of org.talend.core.model.process.EConnectionType (confirmed from
+# Talend source; see references/artifact-formats.md). Lookups into tMap are written
+# connectorName="FLOW" with lineStyle 8, so lineStyle is what distinguishes them.
+LOOKUP_LINESTYLE = "8"
+LINESTYLE_KIND = {
+    "0": "row", "1": "trigger", "2": "trigger", "3": "trigger", "4": "trigger", "5": "trigger",
+    "6": "trigger", "7": "iterate", "8": "lookup", "9": "row", "10": "row", "11": "row",
+    "12": "trigger", "13": "trigger", "14": "route", "15": "route", "16": "route", "17": "route",
+    "18": "route", "19": "route", "20": "route", "21": "trigger", "22": "row",
+}
+LINESTYLE_NAME = {
+    "1": "SUBJOB_OK", "2": "RUN_AFTER", "3": "COMPONENT_OK", "4": "SUBJOB_ERROR", "5": "COMPONENT_ERROR",
+    "6": "RUN_IF", "7": "ITERATE", "8": "LOOKUP", "9": "TABLE", "10": "MERGE", "12": "SYNCHRONIZE",
+    "13": "PARALLELIZE", "14": "ROUTE", "15": "ROUTE_WHEN", "16": "ROUTE_OTHER", "17": "ROUTE_TRY",
+    "18": "ROUTE_CATCH", "19": "ROUTE_FINALLY", "20": "ROUTE_ENDBLOCK",
+}
 
 # Parameters that are UI noise; hidden unless --all-params.
 NOISE_PARAMS = {
@@ -255,8 +272,13 @@ def parse_item(path: str) -> dict:
     for c in root.findall("connection"):
         p = _params(c)
         connector = c.get("connectorName") or ""
-        kind = CONNECTOR_KIND.get(connector, "row")
-        if connector == "FLOW" and c.get("lineStyle") == LOOKUP_LINESTYLE:
+        style = c.get("lineStyle") or ""
+        if connector in CONNECTOR_KIND:
+            kind = CONNECTOR_KIND[connector]
+        else:
+            kind = LINESTYLE_KIND.get(style, "row")
+            connector = connector or LINESTYLE_NAME.get(style, "")
+        if connector in ("FLOW", "MAIN") and style == LOOKUP_LINESTYLE:
             kind = "lookup"
         job["connections"].append({
             "name": p.get("UNIQUE_NAME", {}).get("value") or c.get("label"),
