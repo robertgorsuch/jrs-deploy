@@ -317,7 +317,8 @@ lookups inside one subjob prefer tMap lookup with "Load once" (tmap-expressions.
    fails at start-up.
 4. tRunJob Context Param / Transmit whole context (child jobs only).
 5. Values of the selected context group (`--context=Prod`), compiled into
-   `<JobName>_<Context>.properties` inside the jar.
+   `<project>/<job>_<ver>/contexts/<ContextName>.properties` inside the job jar (no job-name prefix;
+   see deployment-runtime.md).
 6. The Default context group when `--context` is absent.
 
 Context variables declared with `[Prompt]` prompt interactively only in Studio.

@@ -54,3 +54,6 @@ stdlib-only Python helpers and three slash commands.
 - `evals/results/iteration-1/`: with-skill vs without-skill answers, grading,
   benchmark and a standalone `review.html`. Pass rates tied at 100%; the skill
   run made 1 factual error (fixed) against 5 for the baseline. See its README.
+- `evals/results/iteration-2/`: re-run against the strengthened assertions
+  after the iteration-1 fixes: skill 28/28 vs baseline 26/28, 1 vs 2 false
+  claims. Two reference inconsistencies found by the grader were corrected.
