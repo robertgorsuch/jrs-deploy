@@ -15,15 +15,35 @@
     2. environment variables JRS_URL / JRS_USER / JRS_PASS
     3. jrs.config.json in the skill root (gitignored)
 
+  Scheduler control (1.4.0): pause | resume | restart act on explicit job ids
+  (-Id) or on every job (-All, expanded client-side into an explicit id list:
+  an EMPTY list sent to /jobs/pause or /jobs/resume acts on every job in the
+  scheduler, REST ref 10.0.0 p.229-231, so the script never sends one). These
+  PLAN by default and write only with -Apply, journaled under out\runs so
+  recover_run.ps1 -RunId <id> -Rollback -Apply undoes them (pause <-> resume of
+  exactly the jobs the run changed; restart is irreversible). Resume does not
+  re-run triggers missed while a job was paused. `state` is read-only.
+  A prod profile additionally needs $env:JRS_ALLOW_PROD_WRITE = '1'.
+
 .PARAMETER Action
-  create (default) | list | get | delete.
+  create (default) | list | get | delete | pause | resume | restart | state.
 
 .PARAMETER ReportUri
   Repository URI of the report unit to schedule, e.g.
   /reports/geocoder/county_summary. Required for create; optional filter for list.
 
 .PARAMETER Id
-  Numeric job id (required for get/delete).
+  Job id(s). Exactly one for get/delete; one or more for pause/resume/restart/
+  state (an array, or one comma-separated string such as "101,103").
+
+.PARAMETER All
+  pause/resume/restart/state: every job on the server (mutually exclusive with -Id).
+
+.PARAMETER Apply
+  pause/resume/restart: actually write. Without it the plan is printed only.
+
+.PARAMETER Env
+  Named profile in jrs.config.json "environments".
 
 .PARAMETER Label
   Job label (create). Defaults to "<report leaf> scheduled".
@@ -77,13 +97,22 @@
 .EXAMPLE
   .\schedule_job.ps1 -Action list -ReportUri /reports/geocoder/county_summary
   .\schedule_job.ps1 -Action delete -Id 42
+
+.EXAMPLE
+  # pause two jobs: plan first, then apply; undo with recover_run.ps1
+  .\schedule_job.ps1 -Action pause -Id 101,103
+  .\schedule_job.ps1 -Action pause -Id 101,103 -Apply
+  .\schedule_job.ps1 -Action state -Id 101,103
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet("create", "list", "get", "delete")]
+    [ValidateSet("create", "list", "get", "delete", "pause", "resume", "restart", "state")]
     [string]$Action = "create",
     [string]$ReportUri,
-    [int]$Id,
+    [string[]]$Id,
+    [switch]$All,
+    [switch]$Apply,
+    [string]$Env,
     [string]$Label,
     [ValidateSet("now", "at")]
     [string]$StartType,
@@ -105,11 +134,80 @@ param(
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "_jrs_common.ps1")
-$jrs = Resolve-JrsConfig -ServerUrl $ServerUrl -User $User -Password $Password
+$jrs = Resolve-JrsConfig -ServerUrl $ServerUrl -User $User -Password $Password -Env $Env
 $JOB_MEDIA = "application/job+json"
 
 function leaf($uri) { $uri.Substring($uri.LastIndexOf("/") + 1) }
 function parent($uri) { $uri.Substring(0, $uri.LastIndexOf("/")) }
+
+# -Id arrives as strings (also "101,103" through powershell -File): parse to ints
+$ids = [int[]]@($Id | ForEach-Object { "$_" -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ } | ForEach-Object {
+    $n = 0; if (-not [int]::TryParse($_, [ref]$n)) { throw "-Id '$_' is not a job id" }; $n })
+if ($Action -in "get", "delete" -and $ids.Count -ne 1) { throw "-Id takes one id for get/delete" }
+$Id1 = if ($ids.Count) { $ids[0] } else { 0 }
+
+if ($Action -in "pause", "resume", "restart", "state") {
+    $where = "$($jrs.ServerUrl)$(if ($jrs.Env) { " [env $($jrs.Env)]" })"
+    $targets = Resolve-JrsJobTargets -Jrs $jrs -Ids $ids -All:$All
+    $labels = @{}
+    foreach ($j in @(Get-JrsJobList -Jrs $jrs)) { $labels[[int]$j.Id] = $j.Label }
+    $states = @($targets | ForEach-Object { Get-JrsJobState -Jrs $jrs -Id $_ })
+
+    if ($Action -eq "state") {
+        foreach ($s in $states) { Write-Output ("{0,-8} {1,-10} {2,-27} {3}" -f $s.Id, $s.Value, "$($s.NextFireTime)", "$($labels[[int]$s.Id])") }
+        return
+    }
+
+    if ($Action -eq "restart") {
+        $plan = @($states | ForEach-Object {
+            if ($_.Value -eq "MISSING") { [pscustomobject]@{ Id = $_.Id; From = $_.Value; Act = "skip"; Reason = "job not found" } }
+            else { [pscustomobject]@{ Id = $_.Id; From = $_.Value; Act = "restart"; Reason = "fires the job now" } } })
+    } else {
+        $plan = @(Get-JrsJobTransitionPlan -States $states -Action $Action)
+    }
+    Write-Host ""
+    Write-Host "JOBS PLAN ($Action) on $where"
+    foreach ($row in $plan) {
+        Write-Host ("  [{0,-6}] {1,-10} -> {2,-8} {3}{4}" -f $row.Id, $row.From, $row.Act, "$($labels[[int]$row.Id])", $(if ($row.Reason) { "  ($($row.Reason))" } else { "" }))
+    }
+    if ($Action -eq "resume") { Write-Host "  note: resume does not re-run triggers missed while a job was paused (REST ref p.230)" }
+    Write-Host ""
+    $acting = [int[]]@($plan | Where-Object { $_.Act -eq $Action } | ForEach-Object { $_.Id })
+    if ($acting.Count -eq 0) { Write-Host "nothing to do: no job needs to $Action"; return }
+
+    $exitCode = 0
+    $prevMode = Enter-JrsPlanMode -Apply:$Apply
+    try {
+        if (-not $Apply) {
+            Write-Host "[plan] nothing was written to $($jrs.ServerUrl); pass -Apply to $Action $($acting.Count) job(s) (undo later with recover_run.ps1 -RunId <id> -Rollback -Apply)"
+        } else {
+            Assert-JrsWriteAllowed -Jrs $jrs -Method APPLY -Url $jrs.ServerUrl
+            $run = New-JrsRun -Operation "jobs-$Action" -Target $jrs -Mode apply `
+                -Plan @([pscustomobject]@{ Order = 1; Kind = "jobs-$Action"; Uri = "/rest_v2/jobs/$Action"; Action = "$Action jobs $($acting -join ',')" }) `
+                -Arguments @{ Action = $Action; Id = ($acting -join ","); All = [bool]$All }
+            $step = "jobs-${Action}:" + ($acting -join ",")
+            try {
+                if ($Action -eq "restart") {
+                    Write-JrsStep -Run $run -Step $step -State RUNNING -Irreversible "restart fires the job now"
+                } else {
+                    $inverse = if ($Action -eq "pause") { "jobs-resume" } else { "jobs-pause" }
+                    Write-JrsStep -Run $run -Step $step -State RUNNING -Compensation @{ type = $inverse; ids = @($acting) }
+                }
+                $echo = @(Invoke-JrsJobBatch -Jrs $jrs -Action $Action -Ids $acting)
+                Write-JrsStep -Run $run -Step $step -State SUCCEEDED -Detail "server acted on $($echo -join ',')"
+                Complete-JrsRun -Run $run -Status SUCCEEDED
+                Write-Host "OK: $Action $($echo -join ',') (run $($run.RunId))"
+            } catch {
+                Write-JrsStep -Run $run -Step $step -State FAILED -Detail "$_"
+                Complete-JrsRun -Run $run -Status FAILED -ExitCode 4 -Error "$_"
+                Write-Host "FAILED (run $($run.RunId)): $_"
+                Write-Host "undo what was done with: recover_run.ps1 -RunId $($run.RunId) -Rollback -Apply"
+                $exitCode = 4
+            }
+        }
+    } finally { Restore-JrsPlanMode $prevMode }
+    exit $exitCode
+}
 
 switch ($Action) {
     "list" {
@@ -121,17 +219,17 @@ switch ($Action) {
         return
     }
     "get" {
-        if (-not $Id) { throw "-Id is required for get" }
-        $r = Invoke-JrsRest -Jrs $jrs -Method GET -Path "/rest_v2/jobs/$Id" -Accept $JOB_MEDIA
+        if (-not $Id1) { throw "-Id is required for get" }
+        $r = Invoke-JrsRest -Jrs $jrs -Method GET -Path "/rest_v2/jobs/$Id1" -Accept $JOB_MEDIA
         Assert-JrsOk -Response $r -Operation "get failed" | Out-Null
         Write-Output $r.Body
         return
     }
     "delete" {
-        if (-not $Id) { throw "-Id is required for delete" }
-        $r = Invoke-JrsRest -Jrs $jrs -Method DELETE -Path "/rest_v2/jobs/$Id"
+        if (-not $Id1) { throw "-Id is required for delete" }
+        $r = Invoke-JrsRest -Jrs $jrs -Method DELETE -Path "/rest_v2/jobs/$Id1"
         Assert-JrsOk -Response $r -Operation "delete failed" | Out-Null
-        Write-Host "OK ($($r.Code)): deleted job $Id"
+        Write-Host "OK ($($r.Code)): deleted job $Id1"
         return
     }
 }

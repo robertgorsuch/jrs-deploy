@@ -1,0 +1,6 @@
+[
+  { "id": 101, "label": "t_job_a", "reportUnitURI": "/reports/t/r1", "owner": "t_user|t_org", "state": "NORMAL" },
+  { "id": 102, "label": "t_job_b", "reportUnitURI": "/reports/t/r2", "owner": "t_user|t_org", "state": "NORMAL" },
+  { "id": 103, "label": "t_job_c", "reportUnitURI": "/reports/t/r3", "owner": "t_user|t_org", "state": "PAUSED" },
+  { "id": 104, "label": "t_job_d", "reportUnitURI": "/reports/t/r4", "owner": "t_user|t_org", "state": "NORMAL" }
+]

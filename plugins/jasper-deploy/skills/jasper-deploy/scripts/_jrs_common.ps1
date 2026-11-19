@@ -93,6 +93,8 @@
   Run journal        - see _jrs_run.ps1 (dot-sourced below): New-JrsRun,
                        Write-JrsStep, Complete-JrsRun, Get-JrsRun(s),
                        Get-JrsRollbackPlan, Invoke-JrsRollback.
+  Scheduler helpers  - see _jobs_common.ps1 (dot-sourced below): Get-JrsJobList,
+                       Get-JrsJobState, Invoke-JrsJobBatch, ...
 #>
 
 # $IsWindows is an automatic in pwsh 6+; it does NOT exist under Windows
@@ -565,3 +567,5 @@ function Invoke-JrCompile {
 
 # --- run journal + rollback (no param block; see the header) -----------------
 . (Join-Path $PSScriptRoot "_jrs_run.ps1")
+# --- scheduler helpers (jobs pause/resume compensations replay through these) -
+. (Join-Path $PSScriptRoot "_jobs_common.ps1")

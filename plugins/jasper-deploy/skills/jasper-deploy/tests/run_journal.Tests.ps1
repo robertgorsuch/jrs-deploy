@@ -130,3 +130,26 @@ Describe "run journal" {
         $plan[0].Step | Should Be "1"
     }
 }
+
+Describe "jobs compensations" {
+    Context "empty ids" {
+        It "a jobs-resume compensation with no ids sends nothing" {
+            Mock Invoke-JrsJobBatch { throw "must not be called" }
+            $d = Invoke-JrsCompensation -Jrs $script:Target -Comp ([pscustomobject]@{ type = "jobs-resume"; ids = @() })
+            "$d" | Should Match "no jobs"
+            Assert-MockCalled Invoke-JrsJobBatch -Times 0
+        }
+    }
+    Context "ids" {
+        It "a jobs-resume compensation resumes exactly its ids" {
+            Mock Invoke-JrsJobBatch { [int[]]@(101, 104) }
+            Invoke-JrsCompensation -Jrs $script:Target -Comp ([pscustomobject]@{ type = "jobs-resume"; ids = @(101, 104) }) | Out-Null
+            Assert-MockCalled Invoke-JrsJobBatch -Times 1 -ParameterFilter { $Action -eq "resume" -and ($Ids -join ",") -eq "101,104" }
+        }
+        It "a jobs-pause compensation pauses exactly its ids" {
+            Mock Invoke-JrsJobBatch { [int[]]@(7) }
+            Invoke-JrsCompensation -Jrs $script:Target -Comp ([pscustomobject]@{ type = "jobs-pause"; ids = @(7) }) | Out-Null
+            Assert-MockCalled Invoke-JrsJobBatch -Times 1 -ParameterFilter { $Action -eq "pause" }
+        }
+    }
+}

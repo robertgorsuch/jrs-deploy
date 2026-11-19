@@ -33,6 +33,9 @@
 #                                                             not overwrite a dashboard's companion files)
 #   @{ type = 'move';     from = '/reports/b/x'; toFolder = '/reports/a' }
 #                                                             move a relocated resource back (relocate_resource.ps1 -Move)
+#   @{ type = 'jobs-resume'; ids = @(101,104) }  /  @{ type = 'jobs-pause'; ids = @(...) }
+#                                                             undo schedule_job.ps1 pause/resume for exactly those ids
+#                                                             (an empty ids list is a no-op, never an empty POST)
 #
 # Location: $env:JRS_RUNS_DIR, else <skill>/out/runs (gitignored).
 # Exit codes (jrsctl table): 0 ok, 2 precheck failed / nothing mutated,
@@ -249,6 +252,14 @@ function Invoke-JrsCompensation {
             if ("$($r.Code)" -notmatch '^2\d\d$') { throw "MOVE $($Comp.from) -> $($Comp.toFolder): HTTP $($r.Code)" }
             return "MOVE $($Comp.from) -> $($Comp.toFolder) -> HTTP $($r.Code)"
         }
+        { $_ -in "jobs-pause", "jobs-resume" } {
+            # undo schedule_job.ps1 pause/resume: act on EXACTLY the recorded ids (never an empty list)
+            $act = $type.Substring(5)
+            $ids = [int[]]@($Comp.ids | Where-Object { $_ -ne $null })
+            if ($ids.Count -eq 0) { return "no jobs to $act" }
+            $echo = Invoke-JrsJobBatch -Jrs $Jrs -Action $act -Ids $ids
+            return "jobs $act $($ids -join ',') -> server acted on $(@($echo) -join ',')"
+        }
         default { throw "unknown compensation type '$type'" }
     }
 }
@@ -271,6 +282,8 @@ function Invoke-JrsRollback {
             "delete"   { "DELETE $($p.Compensation.uri)" }
             "reimport" { "RE-IMPORT $($p.Compensation.zip)$(if ($p.Compensation.uri) { " -> $($p.Compensation.uri)" })" }
             "move"     { "MOVE $($p.Compensation.from) -> $($p.Compensation.toFolder)" }
+            "jobs-pause"  { "PAUSE jobs $(@($p.Compensation.ids) -join ',')" }
+            "jobs-resume" { "RESUME jobs $(@($p.Compensation.ids) -join ',')" }
             default    { "?? $($p.Compensation.type)" }
         }
         Write-Host ("  [{0,3}] {1,-40} {2,-9} {3}" -f $n, $p.Step, $p.State, $what)

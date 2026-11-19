@@ -11,6 +11,7 @@ $scripts  = Join-Path (Split-Path -Parent $here) "scripts"
 $mock     = Join-Path $here "mock_jrs.py"
 $rec      = Join-Path $here "recordings/10.0.0-PRO"
 $fixture  = Join-Path $here "fixtures/harness/harness_dashboard.json"
+$jobsFix  = Join-Path $here "fixtures/jobs/jobs.json"      # synthetic scheduler: 101-104, 103 starts PAUSED
 $dashUri  = "/reports/_smoke/harness/harness_dash"
 . (Join-Path $scripts "_jrs_common.ps1")
 
@@ -46,7 +47,7 @@ Describe "recorded-server harness (mock_jrs.py + STAGE recording)" {
     if ($script:haveTools) {
         [Environment]::SetEnvironmentVariable("JRS_RUNS_DIR", $script:runs)
         [Environment]::SetEnvironmentVariable("JRS_ALLOW_PROD_WRITE", $null)
-        $sp = @{ FilePath = $script:py; ArgumentList = @("`"$mock`"", "--port", $script:port, "--recording", "`"$rec`"", "--log", "`"$($script:log)`"")
+        $sp = @{ FilePath = $script:py; ArgumentList = @("`"$mock`"", "--port", $script:port, "--recording", "`"$rec`"", "--log", "`"$($script:log)`"", "--jobs", "`"$jobsFix`"")
                  PassThru = $true; RedirectStandardOutput = (Join-Path $script:tmp "mock.out"); RedirectStandardError = (Join-Path $script:tmp "mock.err") }
         if (Test-JrsWindows) { $sp.WindowStyle = "Hidden" }   # -WindowStyle is not supported by pwsh on Linux/macOS
         $script:proc = Start-Process @sp
@@ -207,6 +208,84 @@ Describe "recorded-server harness (mock_jrs.py + STAGE recording)" {
         $r.Out | Should Match 'MOVE'
         Get-MockStatus $relSrc | Should Be 200
         Get-MockStatus "$relDstFolder/r" | Should Be 404
+    }
+
+    # --- schedule_job.ps1 pause / resume (mock scheduler from fixtures/jobs) -----
+    function Get-MockJobState([int]$JobId) {
+        try { ((Invoke-WebRequest -UseBasicParsing -Uri "$($script:dst)/rest_v2/jobs/$JobId/state").Content | ConvertFrom-Json).value } catch { "HTTP-ERR" }
+    }
+    function Get-JobBatchWrites { @(Get-Writes | Where-Object { $_.path -match '^/rest_v2/jobs/(pause|resume|restart)' }) }
+
+    It "schedule_job.ps1 -Action pause (plan mode) issues GETs only" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "pause", "-Id", "101,103") + $tgt)
+        $r.Exit | Should Be 0
+        $r.Out | Should Match 'JOBS PLAN'
+        $r.Out | Should Match '\[plan\] nothing was written'
+        (Get-Writes).Count | Should Be 0
+    }
+
+    It "schedule_job.ps1 -Action pause -Apply pauses only the NORMAL job" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "pause", "-Id", "101,103", "-Apply") + $tgt)
+        $r.Exit | Should Be 0
+        $w = @(Get-Writes)
+        $w.Count | Should Be 1
+        $w[0].path | Should Match '^/rest_v2/jobs/pause'
+        $w[0].jobIds | Should Be 1                          # 103 was already PAUSED
+        Get-MockJobState 101 | Should Be "PAUSED"
+    }
+
+    It "schedule_job.ps1 -Action pause -Apply on an already-paused job sends nothing" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "pause", "-Id", "103", "-Apply") + $tgt)
+        $r.Exit | Should Be 0
+        $r.Out | Should Match 'nothing to do'
+        (Get-Writes).Count | Should Be 0
+    }
+
+    It "schedule_job.ps1 -Action pause -Apply without -Id or -All fails and sends nothing" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "pause", "-Apply") + $tgt)
+        $r.Exit | Should Not Be 0
+        $r.Out | Should Match 'without -All'
+        (Get-Writes).Count | Should Be 0
+    }
+
+    It "schedule_job.ps1 -Action resume -Id 101 -Apply resumes it" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "resume", "-Id", "101", "-Apply") + $tgt)
+        $r.Exit | Should Be 0
+        $r.Out | Should Match 'missed'
+        Get-MockJobState 101 | Should Be "NORMAL"
+    }
+
+    It "schedule_job.ps1 -Action pause -All -Apply sends an explicit list (never empty)" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "pause", "-All", "-Apply") + $tgt)
+        $r.Exit | Should Be 0
+        $w = @(Get-JobBatchWrites)
+        $w.Count | Should Be 1
+        $w[0].jobIds | Should Be 3                          # 101, 102, 104 (103 already paused)
+        foreach ($j in 101, 102, 103, 104) { Get-MockJobState $j | Should Be "PAUSED" }
+    }
+
+    It "recover_run.ps1 -Rollback -Apply resumes only what the pause run paused" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "recover_run.ps1" (@("-RunId", "latest", "-Rollback", "-Apply") + $tgt)
+        $r.Exit | Should Be 3
+        $r.Out | Should Match 'RESUME'
+        foreach ($j in 101, 102, 104) { Get-MockJobState $j | Should Be "NORMAL" }
+        Get-MockJobState 103 | Should Be "PAUSED"           # paused before the run: rollback leaves it paused
+    }
+
+    It "schedule_job.ps1 -Action state prints states and writes nothing" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "state", "-Id", "101,103") + $tgt)
+        $r.Exit | Should Be 0
+        $r.Out | Should Match '101\s+NORMAL'
+        $r.Out | Should Match '103\s+PAUSED'
+        (Get-Writes).Count | Should Be 0
     }
 
     if ($script:proc) { try { Stop-Process -Id $script:proc.Id -Force -ErrorAction SilentlyContinue } catch { } }
