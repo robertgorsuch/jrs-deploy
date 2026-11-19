@@ -25,8 +25,21 @@
   re-run triggers missed while a job was paused. `state` is read-only.
   A prod profile additionally needs $env:JRS_ALLOW_PROD_WRITE = '1'.
 
+  Upgrade windows: `snapshot` (read-only, PROD-safe) saves every job's state to
+  out\job-snapshots\; `restore -Snapshot <file>` puts those states back (plan by
+  default): re-pauses jobs an upgrade resumed (7.5.1 -> 7.9.2+ does, KB) and
+  resumes jobs that were running. Jobs are matched by id, else by label + report
+  URI; unmatched ones are listed and make the exit code 2 (review by hand).
+
 .PARAMETER Action
-  create (default) | list | get | delete | pause | resume | restart | state.
+  create (default) | list | get | delete | pause | resume | restart | state |
+  snapshot | restore.
+
+.PARAMETER Snapshot
+  restore: the snapshot file written by -Action snapshot.
+
+.PARAMETER Out
+  snapshot: output file (default out\job-snapshots\<env|host-port>-<timestamp>.json).
 
 .PARAMETER ReportUri
   Repository URI of the report unit to schedule, e.g.
@@ -106,13 +119,15 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet("create", "list", "get", "delete", "pause", "resume", "restart", "state")]
+    [ValidateSet("create", "list", "get", "delete", "pause", "resume", "restart", "state", "snapshot", "restore")]
     [string]$Action = "create",
     [string]$ReportUri,
     [string[]]$Id,
     [switch]$All,
     [switch]$Apply,
     [string]$Env,
+    [string]$Snapshot,
+    [string]$Out,
     [string]$Label,
     [ValidateSet("now", "at")]
     [string]$StartType,
@@ -145,6 +160,74 @@ $ids = [int[]]@($Id | ForEach-Object { "$_" -split "," } | ForEach-Object { $_.T
     $n = 0; if (-not [int]::TryParse($_, [ref]$n)) { throw "-Id '$_' is not a job id" }; $n })
 if ($Action -in "get", "delete" -and $ids.Count -ne 1) { throw "-Id takes one id for get/delete" }
 $Id1 = if ($ids.Count) { $ids[0] } else { 0 }
+
+if ($Action -eq "snapshot") {
+    $path = New-JrsJobSnapshot -Jrs $jrs -Path $Out
+    $n = @((Get-Content $path -Raw | ConvertFrom-Json).jobs).Count
+    Write-Host "OK: snapshot of $n job(s) -> $path"
+    Write-Output $path
+    return
+}
+
+if ($Action -eq "restore") {
+    if (-not $Snapshot) { throw "-Snapshot <file> is required for restore" }
+    if (-not (Test-Path $Snapshot)) { throw "snapshot not found: $Snapshot" }
+    $snap = Get-Content $Snapshot -Raw | ConvertFrom-Json
+    $where = "$($jrs.ServerUrl)$(if ($jrs.Env) { " [env $($jrs.Env)]" })"
+    $current = @(Get-JrsJobList -Jrs $jrs | ForEach-Object {
+        [pscustomobject]@{ Id = $_.Id; Label = $_.Label; ReportUnitURI = $_.ReportUnitURI; Value = (Get-JrsJobState -Jrs $jrs -Id $_.Id).Value } })
+    $plan = @(Get-JrsJobRestorePlan -Snapshot $snap -Current $current)
+    Write-Host ""
+    Write-Host "JOBS RESTORE PLAN from $Snapshot (taken $($snap.takenAt) on $($snap.server)) to $where"
+    foreach ($row in $plan) {
+        Write-Host ("  [{0,-6}] {1,-10} was {2,-8} now {3,-9} -> {4,-10} {5}" -f $row.Id, "$($row.Label)", $row.Was, $row.Now, $row.Act, $(if ($row.MatchedBy -and $row.MatchedBy -ne "id") { "(matched by $($row.MatchedBy))" } else { "" }))
+    }
+    $unresolved = @($plan | Where-Object { $_.Act -eq "unresolved" })
+    $batches = @(
+        @{ Action = "pause";  Ids = [int[]]@($plan | Where-Object { $_.Act -eq "pause" }  | ForEach-Object { $_.Id }) },
+        @{ Action = "resume"; Ids = [int[]]@($plan | Where-Object { $_.Act -eq "resume" } | ForEach-Object { $_.Id }) }
+    ) | Where-Object { $_.Ids.Count -gt 0 }
+    if (@($batches | Where-Object { $_.Action -eq "resume" }).Count) { Write-Host "  note: resume does not re-run triggers missed while a job was paused (REST ref p.230)" }
+    Write-Host ""
+    $exitCode = 0
+    if (@($batches).Count -eq 0) {
+        Write-Host "nothing to do: every matched job already has its snapshot state"
+    } else {
+        $prevMode = Enter-JrsPlanMode -Apply:$Apply
+        try {
+            if (-not $Apply) {
+                Write-Host "[plan] nothing was written to $($jrs.ServerUrl); pass -Apply to restore (undo later with recover_run.ps1 -RunId <id> -Rollback -Apply)"
+            } else {
+                Assert-JrsWriteAllowed -Jrs $jrs -Method APPLY -Url $jrs.ServerUrl
+                $run = New-JrsRun -Operation "jobs-restore" -Target $jrs -Mode apply `
+                    -Plan @($batches | ForEach-Object { [pscustomobject]@{ Order = 1; Kind = "jobs-$($_.Action)"; Uri = "/rest_v2/jobs/$($_.Action)"; Action = "$($_.Action) jobs $($_.Ids -join ',')" } }) `
+                    -Arguments @{ Snapshot = $Snapshot }
+                try {
+                    foreach ($b in $batches) {
+                        $step = "jobs-$($b.Action):" + ($b.Ids -join ",")
+                        $inverse = if ($b.Action -eq "pause") { "jobs-resume" } else { "jobs-pause" }
+                        Write-JrsStep -Run $run -Step $step -State RUNNING -Compensation @{ type = $inverse; ids = @($b.Ids) }
+                        $echo = @(Invoke-JrsJobBatch -Jrs $jrs -Action $b.Action -Ids $b.Ids)
+                        Write-JrsStep -Run $run -Step $step -State SUCCEEDED -Detail "server acted on $($echo -join ',')"
+                        Write-Host "OK: $($b.Action) $($echo -join ',')"
+                    }
+                    Complete-JrsRun -Run $run -Status SUCCEEDED
+                    Write-Host "OK: restored job states (run $($run.RunId))"
+                } catch {
+                    Complete-JrsRun -Run $run -Status FAILED -ExitCode 4 -Error "$_"
+                    Write-Host "FAILED (run $($run.RunId)): $_"
+                    Write-Host "undo what was done with: recover_run.ps1 -RunId $($run.RunId) -Rollback -Apply"
+                    $exitCode = 4
+                }
+            }
+        } finally { Restore-JrsPlanMode $prevMode }
+    }
+    if ($unresolved.Count -and $exitCode -eq 0) {
+        Write-Host "REVIEW BY HAND: $($unresolved.Count) snapshot job(s) could not be matched: $(($unresolved | ForEach-Object { "$($_.Id) $($_.Label) ($($_.Now))" }) -join '; ')"
+        $exitCode = 2
+    }
+    exit $exitCode
+}
 
 if ($Action -in "pause", "resume", "restart", "state") {
     $where = "$($jrs.ServerUrl)$(if ($jrs.Env) { " [env $($jrs.Env)]" })"

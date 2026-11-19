@@ -115,3 +115,40 @@ Describe "Get-JrsJobState" {
         }
     }
 }
+
+Describe "Get-JrsJobRestorePlan" {
+    function Snap($jobs) { [pscustomobject]@{ jobs = @($jobs) } }
+    function SJ($id, $state, $label = "t_job_a", $uri = "/reports/t/r1") { [pscustomobject]@{ id = $id; label = $label; reportUnitURI = $uri; state = $state } }
+    function CJ($id, $value, $label = "t_job_a", $uri = "/reports/t/r1") { [pscustomobject]@{ Id = $id; Label = $label; ReportUnitURI = $uri; Value = $value } }
+
+    It "re-pauses a job that was PAUSED and is NORMAL now (matched by id)" {
+        $p = @(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @(CJ 101 "NORMAL"))
+        $p.Count | Should Be 1
+        $p[0].Act | Should Be "pause"
+        $p[0].MatchedBy | Should Be "id"
+    }
+    It "resumes a job that was NORMAL and is PAUSED now" {
+        (@(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "NORMAL")) -Current @(CJ 101 "PAUSED")))[0].Act | Should Be "resume"
+    }
+    It "leaves a job alone when its state already matches" {
+        (@(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @(CJ 101 "PAUSED")))[0].Act | Should Be "none"
+    }
+    It "falls back to label + report uri when the id changed" {
+        $p = @(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @(CJ 555 "NORMAL"))
+        $p[0].Act | Should Be "pause"
+        $p[0].Id | Should Be 555
+        $p[0].MatchedBy | Should Be "label+uri"
+    }
+    It "marks an ambiguous label + uri match unresolved" {
+        $p = @(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @((CJ 555 "NORMAL"), (CJ 556 "NORMAL")))
+        $p[0].Act | Should Be "unresolved"
+    }
+    It "marks a job that no longer exists unresolved" {
+        (@(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @()))[0].Act | Should Be "unresolved"
+    }
+    It "does not list current jobs that are not in the snapshot" {
+        $p = @(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "NORMAL")) -Current @((CJ 101 "NORMAL"), (CJ 999 "PAUSED" "other" "/reports/x")))
+        $p.Count | Should Be 1
+        $p[0].Id | Should Be 101
+    }
+}

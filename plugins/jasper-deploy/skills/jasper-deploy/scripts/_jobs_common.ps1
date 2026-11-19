@@ -25,6 +25,10 @@
   Invoke-JrsJobBatch  - POST /rest_v2/jobs/<pause|resume|restart> with explicit
                         ids -> [int[]] the ids the server echoed. Goes through
                         Invoke-JrsRest, so PLAN MODE / PROD GUARD apply.
+  New-JrsJobSnapshot  - read-only: every job + state to JSON (default
+                        out/job-snapshots/<env|host-port>-<ts>.json) -> path.
+  Get-JrsJobRestorePlan - pure: snapshot vs current -> rows { Id; Label; Was;
+                        Now; Act (pause|resume|none|unresolved); MatchedBy }.
 #>
 
 if (-not (Get-Command Invoke-JrsRest -ErrorAction SilentlyContinue)) {
@@ -113,4 +117,52 @@ function Invoke-JrsJobBatch {
     $echo = @()
     if ($r.Body) { try { $echo = @(($r.Body | ConvertFrom-Json).jobId) } catch { $echo = @() } }
     return [int[]]@($echo | Where-Object { $_ -ne $null })
+}
+
+function New-JrsJobSnapshot {
+    # Read-only (allowed on PROD): every job's id/label/report/owner/state to a
+    # JSON file. No credentials are written. Returns the path.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Jrs, [string]$Path)
+    if (-not $Path) {
+        $u = [uri]$Jrs.ServerUrl
+        $tag = if ($Jrs.Env) { "$($Jrs.Env)" } else { "$($u.Host)-$($u.Port)" }
+        $dir = Join-Path $PSScriptRoot "../out/job-snapshots"
+        $Path = Join-Path $dir ("{0}-{1}.json" -f ($tag -replace '[^0-9A-Za-z_.-]', '_'), (Get-Date -Format "yyyyMMdd-HHmmss"))
+    }
+    $parent = Split-Path -Parent $Path
+    if ($parent) { New-Item -ItemType Directory -Force $parent | Out-Null }
+    $jobs = @(Get-JrsJobList -Jrs $Jrs | ForEach-Object {
+        $s = Get-JrsJobState -Jrs $Jrs -Id $_.Id
+        [ordered]@{ id = $_.Id; label = $_.Label; reportUnitURI = $_.ReportUnitURI; owner = $_.Owner; state = $s.Value; nextFireTime = $s.NextFireTime }
+    })
+    $doc = [ordered]@{ server = $Jrs.ServerUrl; env = $Jrs.Env; takenAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"); jobs = $jobs }
+    [IO.File]::WriteAllText($Path, (ConvertTo-Json -InputObject $doc -Depth 6), (New-Object Text.UTF8Encoding($false)))
+    return $Path
+}
+
+function Get-JrsJobRestorePlan {
+    # Pure. Compare a snapshot with the current jobs ({ Id; Label; ReportUnitURI;
+    # Value }). Match by id first; when the id is gone (repository rebuilt by
+    # export/import) match by label + reportUnitURI, only when exactly one current
+    # job matches. Snapshot PAUSED / now NORMAL -> pause (the 7.5.1 -> 7.9.2+
+    # upgrade resumes paused jobs, KB); snapshot NORMAL / now PAUSED -> resume.
+    # Current jobs absent from the snapshot are left alone and not listed.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Snapshot, [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Current)
+    foreach ($s in @($Snapshot.jobs | Where-Object { $_ })) {
+        $by = "id"
+        $c = @($Current | Where-Object { [int]$_.Id -eq [int]$s.id })
+        if ($c.Count -ne 1) {
+            $by = "label+uri"
+            $c = @($Current | Where-Object { $_.Label -eq $s.label -and $_.ReportUnitURI -eq $s.reportUnitURI })
+        }
+        if ($c.Count -ne 1) {
+            [pscustomobject]@{ Id = [int]$s.id; Label = $s.label; Was = "$($s.state)"; Now = $(if ($c.Count) { "AMBIGUOUS" } else { "MISSING" }); Act = "unresolved"; MatchedBy = "" }
+            continue
+        }
+        $now = "$($c[0].Value)"; $was = "$($s.state)"
+        $act = if ($was -eq "PAUSED" -and $now -eq "NORMAL") { "pause" } elseif ($was -eq "NORMAL" -and $now -eq "PAUSED") { "resume" } else { "none" }
+        [pscustomobject]@{ Id = [int]$c[0].Id; Label = $s.label; Was = $was; Now = $now; Act = $act; MatchedBy = $by }
+    }
 }

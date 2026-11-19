@@ -288,6 +288,31 @@ Describe "recorded-server harness (mock_jrs.py + STAGE recording)" {
         (Get-Writes).Count | Should Be 0
     }
 
+    It "schedule_job.ps1 -Action snapshot writes a file and nothing to the server" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $script:snap = Join-Path $script:tmp "jobs-snapshot.json"
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "snapshot", "-Out", $script:snap) + $tgt)
+        $r.Exit | Should Be 0
+        (Get-Writes).Count | Should Be 0
+        $doc = Get-Content $script:snap -Raw | ConvertFrom-Json
+        @($doc.jobs).Count | Should Be 4
+        (Get-Content $script:snap -Raw) | Should Not Match '"p"'
+    }
+
+    It "schedule_job.ps1 -Action restore -Apply puts the snapshot states back" -Skip:(-not $script:haveTools) {
+        Invoke-Skill "schedule_job.ps1" (@("-Action", "pause", "-All", "-Apply") + $tgt) | Out-Null
+        foreach ($j in 101, 102, 103, 104) { Get-MockJobState $j | Should Be "PAUSED" }
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "restore", "-Snapshot", $script:snap, "-Apply") + $tgt)
+        $r.Exit | Should Be 0
+        $w = @(Get-JobBatchWrites)
+        $w.Count | Should Be 1
+        $w[0].path | Should Match '^/rest_v2/jobs/resume'
+        $w[0].jobIds | Should Be 3
+        foreach ($j in 101, 102, 104) { Get-MockJobState $j | Should Be "NORMAL" }
+        Get-MockJobState 103 | Should Be "PAUSED"
+    }
+
     if ($script:proc) { try { Stop-Process -Id $script:proc.Id -Force -ErrorAction SilentlyContinue } catch { } }
     [Environment]::SetEnvironmentVariable("JRS_RUNS_DIR", $null)
     Remove-Item $script:tmp -Recurse -Force -ErrorAction SilentlyContinue
