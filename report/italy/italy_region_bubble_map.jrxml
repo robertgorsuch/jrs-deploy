@@ -1,0 +1,228 @@
+<!-- Created with Jaspersoft Studio version 10.0.0.final using JasperReports Library version 7.0.5-4355b62c664a7760655b513bdd58950cb3365f54  -->
+<jasperReport name="italy_region_bubble_map" language="java" pageWidth="842" pageHeight="595" columnWidth="802" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="17a1b0b0-0001-0002-0003-000000000001" titleNewPage="true">
+	<dataset name="bubbles" uuid="17a1b0b0-0001-0002-0003-000000000002">
+		<query language="sql"><![CDATA[SELECT r.region_id, r.region, r.short_code, r.population, r.map_x, r.map_y, o.orders, o.revenue, round(o.revenue / r.population * 1000, 0) AS rev_per_1k, round(4 + 15 * sqrt((o.revenue / r.population) / max(o.revenue / r.population) OVER ()), 1) AS radius FROM demo_italy_regions r JOIN (SELECT region_id, count(*) AS orders, sum(amount) AS revenue FROM demo_italy_orders GROUP BY region_id) o ON o.region_id = r.region_id ORDER BY rev_per_1k DESC]]></query>
+		<field name="region_id" class="java.lang.String"/>
+		<field name="region" class="java.lang.String"/>
+		<field name="short_code" class="java.lang.String"/>
+		<field name="population" class="java.lang.Integer"/>
+		<field name="map_x" class="java.math.BigDecimal"/>
+		<field name="map_y" class="java.math.BigDecimal"/>
+		<field name="orders" class="java.lang.Long"/>
+		<field name="revenue" class="java.math.BigDecimal"/>
+		<field name="rev_per_1k" class="java.math.BigDecimal"/>
+		<field name="radius" class="java.math.BigDecimal"/>
+	</dataset>
+	<query language="sql"><![CDATA[SELECT r.region_id, r.region, r.short_code, r.population, o.orders, o.revenue, round(o.revenue / 1000, 1) AS revenue_k, round(o.revenue / r.population * 1000, 0) AS rev_per_1k, round(o.revenue / o.orders, 2) AS avg_order FROM demo_italy_regions r JOIN (SELECT region_id, count(*) AS orders, sum(amount) AS revenue FROM demo_italy_orders GROUP BY region_id) o ON o.region_id = r.region_id ORDER BY rev_per_1k DESC]]></query>
+	<field name="region_id" class="java.lang.String"/>
+	<field name="region" class="java.lang.String"/>
+	<field name="short_code" class="java.lang.String"/>
+	<field name="population" class="java.lang.Integer"/>
+	<field name="orders" class="java.lang.Long"/>
+	<field name="revenue" class="java.math.BigDecimal"/>
+	<field name="revenue_k" class="java.math.BigDecimal"/>
+	<field name="rev_per_1k" class="java.math.BigDecimal"/>
+	<field name="avg_order" class="java.math.BigDecimal"/>
+	<variable name="total_revenue" calculation="Sum" class="java.math.BigDecimal">
+		<expression><![CDATA[$F{revenue}]]></expression>
+	</variable>
+	<variable name="total_orders" calculation="Sum" class="java.lang.Long">
+		<expression><![CDATA[$F{orders}]]></expression>
+	</variable>
+	<variable name="top_region" calculation="First" class="java.lang.String">
+		<expression><![CDATA[$F{region}]]></expression>
+	</variable>
+	<variable name="top_rev_per_1k" calculation="First" class="java.math.BigDecimal">
+		<expression><![CDATA[$F{rev_per_1k}]]></expression>
+	</variable>
+	<title height="555">
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000011" x="0" y="-2" width="802" height="26" forecolor="#000032" fontSize="16.0" bold="true" hTextAlign="Center">
+			<text><![CDATA[Italy Regional Sales: Revenue per 1,000 Residents]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000012" x="0" y="26" width="802" height="14" forecolor="#6C7882" fontSize="9.0" hTextAlign="Center">
+			<text><![CDATA[Bubble area scales with revenue per 1,000 residents (EUR, year to date 2026). Region fill shows total revenue. Demo orders data.]]></text>
+		</element>
+		<element kind="component" uuid="17a1b0b0-0001-0002-0003-000000000020" x="0" y="44" width="560" height="500">
+			<component kind="fusionmap" evaluationTime="Report">
+				<mapNameExpression><![CDATA["Italy"]]></mapNameExpression>
+				<dataset>
+					<entity>
+						<idExpression><![CDATA[$F{region_id}]]></idExpression>
+						<valueExpression><![CDATA[$F{revenue_k}]]></valueExpression>
+					</entity>
+				</dataset>
+				<markerData>
+					<dataset>
+						<datasetRun uuid="17a1b0b0-0001-0002-0003-000000000022" subDataset="bubbles">
+							<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+						</datasetRun>
+					</dataset>
+					<item>
+						<property name="id"><![CDATA["m" + $F{region_id}]]></property>
+						<property name="x"><![CDATA[$F{map_x}.toPlainString()]]></property>
+						<property name="y"><![CDATA[$F{map_y}.toPlainString()]]></property>
+						<property name="shapeId"><![CDATA["s" + $F{region_id}]]></property>
+						<property name="label"><![CDATA[$F{short_code}]]></property>
+						<property name="labelPos" value="center"/>
+						<property name="radius"><![CDATA[$F{radius}.toPlainString()]]></property>
+						<property name="toolText"><![CDATA[$F{region} + ": EUR " + $F{rev_per_1k}.toPlainString() + " per 1,000 residents, " + $F{orders} + " orders, EUR " + $F{revenue}.setScale(0, java.math.RoundingMode.HALF_UP).toPlainString() + " revenue"]]></property>
+					</item>
+				</markerData>
+				<shapeData>
+					<dataset>
+						<datasetRun uuid="17a1b0b0-0001-0002-0003-000000000021" subDataset="bubbles">
+							<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+						</datasetRun>
+					</dataset>
+					<item>
+						<property name="id"><![CDATA["s" + $F{region_id}]]></property>
+						<property name="type" value="circle"/>
+						<property name="radius"><![CDATA[$F{radius}.toPlainString()]]></property>
+						<property name="fillColor" value="2EC0CB"/>
+						<property name="fillAlpha" value="80"/>
+						<property name="borderColor" value="FFFFFF"/>
+						<property name="borderThickness" value="1"/>
+					</item>
+				</shapeData>
+				<property name="includeNameInLabels"><![CDATA[Boolean.FALSE]]></property>
+				<property name="showLabels"><![CDATA[Boolean.FALSE]]></property>
+				<property name="showCanvasBorder"><![CDATA[Boolean.FALSE]]></property>
+				<property name="canvasBorderThickness"><![CDATA[Integer.valueOf(0)]]></property>
+				<property name="borderColor"><![CDATA["FFFFFF"]]></property>
+				<property name="borderThickness"><![CDATA[Integer.valueOf(1)]]></property>
+				<property name="numberPrefix"><![CDATA["EUR "]]></property>
+				<property name="numberSuffix"><![CDATA["k"]]></property>
+				<property name="legendPosition"><![CDATA["BOTTOM"]]></property>
+				<property name="legendItemFontColor"><![CDATA["1D2123"]]></property>
+				<property name="legendCaption"><![CDATA["Total revenue (EUR thousands)"]]></property>
+				<property name="showMarkerLabels"><![CDATA[Boolean.TRUE]]></property>
+				<property name="showMarkerToolTip"><![CDATA[Boolean.TRUE]]></property>
+				<property name="autoScaleMarkers"><![CDATA[Boolean.TRUE]]></property>
+				<property name="markerBgColor"><![CDATA["2EC0CB"]]></property>
+				<property name="markerBorderColor"><![CDATA["FFFFFF"]]></property>
+				<property name="markerLabelFontColor"><![CDATA["000032"]]></property>
+				<colorRange color="#E8F1FF">
+					<minValueExpression><![CDATA[0]]></minValueExpression>
+					<maxValueExpression><![CDATA[100]]></maxValueExpression>
+					<labelExpression><![CDATA["under 100k"]]></labelExpression>
+				</colorRange>
+				<colorRange color="#C8E4FF">
+					<minValueExpression><![CDATA[100]]></minValueExpression>
+					<maxValueExpression><![CDATA[300]]></maxValueExpression>
+					<labelExpression><![CDATA["100k - 300k"]]></labelExpression>
+				</colorRange>
+				<colorRange color="#8AC6F8">
+					<minValueExpression><![CDATA[300]]></minValueExpression>
+					<maxValueExpression><![CDATA[800]]></maxValueExpression>
+					<labelExpression><![CDATA["300k - 800k"]]></labelExpression>
+				</colorRange>
+				<colorRange color="#3C91FF">
+					<minValueExpression><![CDATA[800]]></minValueExpression>
+					<maxValueExpression><![CDATA[100000]]></maxValueExpression>
+					<labelExpression><![CDATA["800k+"]]></labelExpression>
+				</colorRange>
+			</component>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000030" x="580" y="60" width="222" height="16" forecolor="#000032" fontSize="10.0" bold="true">
+			<text><![CDATA[How to read the bubbles]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000031" x="580" y="78" width="222" height="40" forecolor="#1D2123" fontSize="8.0">
+			<text><![CDATA[Each teal bubble sits at a region's centroid. Its area is proportional to revenue per 1,000 residents, computed as sum(order amount) / population x 1,000. Labels are region codes.]]></text>
+		</element>
+		<element kind="ellipse" uuid="17a1b0b0-0001-0002-0003-000000000032" x="586" y="130" width="12" height="12" forecolor="#FFFFFF" backcolor="#2EC0CB"/>
+		<element kind="ellipse" uuid="17a1b0b0-0001-0002-0003-000000000033" x="608" y="124" width="24" height="24" forecolor="#FFFFFF" backcolor="#2EC0CB"/>
+		<element kind="ellipse" uuid="17a1b0b0-0001-0002-0003-000000000034" x="642" y="112" width="48" height="48" forecolor="#FFFFFF" backcolor="#2EC0CB"/>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000035" x="700" y="128" width="102" height="30" forecolor="#6C7882" fontSize="8.0">
+			<text><![CDATA[small -> large:
+lowest -> highest
+revenue per 1,000 residents]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000040" x="580" y="180" width="222" height="16" forecolor="#000032" fontSize="10.0" bold="true">
+			<text><![CDATA[Year to date 2026]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000041" x="580" y="200" width="110" height="12" forecolor="#6C7882" fontSize="8.0">
+			<text><![CDATA[Total revenue]]></text>
+		</element>
+		<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000042" x="580" y="212" width="222" height="20" forecolor="#000032" fontSize="14.0" evaluationTime="Report" pattern="EUR #,##0" bold="true">
+			<expression><![CDATA[$V{total_revenue}]]></expression>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000043" x="580" y="238" width="110" height="12" forecolor="#6C7882" fontSize="8.0">
+			<text><![CDATA[Orders]]></text>
+		</element>
+		<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000044" x="580" y="250" width="222" height="20" forecolor="#000032" fontSize="14.0" evaluationTime="Report" pattern="#,##0" bold="true">
+			<expression><![CDATA[$V{total_orders}]]></expression>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000045" x="580" y="276" width="222" height="12" forecolor="#6C7882" fontSize="8.0">
+			<text><![CDATA[Highest revenue per 1,000 residents]]></text>
+		</element>
+		<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000046" x="580" y="288" width="222" height="16" forecolor="#000032" fontSize="11.0" evaluationTime="Report" bold="true">
+			<expression><![CDATA[$V{top_region} + "  (EUR " + $V{top_rev_per_1k}.toPlainString() + ")"]]></expression>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000047" x="580" y="330" width="222" height="60" forecolor="#6C7882" fontSize="8.0">
+			<text><![CDATA[Region fill (light to dark blue) is total revenue in EUR thousands; the bubble corrects for population so smaller, wealthier regions stand out. Page 2 ranks all 21 regions with orders, revenue, average order value and the per-capita metric.]]></text>
+		</element>
+	</title>
+	<columnHeader height="22">
+		<element kind="rectangle" uuid="17a1b0b0-0001-0002-0003-000000000050" x="0" y="0" width="802" height="22" backcolor="#000032">
+			<pen lineWidth="0.0"/>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000051" x="4" y="0" width="30" height="22" forecolor="#FFFFFF" fontSize="9.0" bold="true" vTextAlign="Middle">
+			<text><![CDATA[#]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000052" x="34" y="0" width="40" height="22" forecolor="#FFFFFF" fontSize="9.0" bold="true" vTextAlign="Middle">
+			<text><![CDATA[Code]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000053" x="74" y="0" width="200" height="22" forecolor="#FFFFFF" fontSize="9.0" bold="true" vTextAlign="Middle">
+			<text><![CDATA[Region]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000054" x="274" y="0" width="100" height="22" forecolor="#FFFFFF" fontSize="9.0" bold="true" hTextAlign="Right" vTextAlign="Middle">
+			<text><![CDATA[Population]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000055" x="374" y="0" width="90" height="22" forecolor="#FFFFFF" fontSize="9.0" bold="true" hTextAlign="Right" vTextAlign="Middle">
+			<text><![CDATA[Orders]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000056" x="464" y="0" width="120" height="22" forecolor="#FFFFFF" fontSize="9.0" bold="true" hTextAlign="Right" vTextAlign="Middle">
+			<text><![CDATA[Revenue (EUR)]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000057" x="584" y="0" width="100" height="22" forecolor="#FFFFFF" fontSize="9.0" bold="true" hTextAlign="Right" vTextAlign="Middle">
+			<text><![CDATA[Avg order (EUR)]]></text>
+		</element>
+		<element kind="staticText" uuid="17a1b0b0-0001-0002-0003-000000000058" x="684" y="0" width="114" height="22" forecolor="#FFFFFF" fontSize="9.0" bold="true" hTextAlign="Right" vTextAlign="Middle">
+			<text><![CDATA[EUR per 1,000 res.]]></text>
+		</element>
+	</columnHeader>
+	<detail>
+		<band height="18">
+			<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000060" x="4" y="0" width="30" height="18" forecolor="#6C7882" fontSize="9.0" vTextAlign="Middle">
+				<expression><![CDATA[$V{REPORT_COUNT}]]></expression>
+			</element>
+			<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000061" x="34" y="0" width="40" height="18" forecolor="#2EC0CB" fontSize="9.0" bold="true" vTextAlign="Middle">
+				<expression><![CDATA[$F{short_code}]]></expression>
+			</element>
+			<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000062" x="74" y="0" width="200" height="18" forecolor="#1D2123" fontSize="9.0" vTextAlign="Middle">
+				<expression><![CDATA[$F{region}]]></expression>
+			</element>
+			<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000063" x="274" y="0" width="100" height="18" forecolor="#1D2123" fontSize="9.0" pattern="#,##0" hTextAlign="Right" vTextAlign="Middle">
+				<expression><![CDATA[$F{population}]]></expression>
+			</element>
+			<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000064" x="374" y="0" width="90" height="18" forecolor="#1D2123" fontSize="9.0" pattern="#,##0" hTextAlign="Right" vTextAlign="Middle">
+				<expression><![CDATA[$F{orders}]]></expression>
+			</element>
+			<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000065" x="464" y="0" width="120" height="18" forecolor="#1D2123" fontSize="9.0" pattern="#,##0" hTextAlign="Right" vTextAlign="Middle">
+				<expression><![CDATA[$F{revenue}]]></expression>
+			</element>
+			<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000066" x="584" y="0" width="100" height="18" forecolor="#1D2123" fontSize="9.0" pattern="#,##0.00" hTextAlign="Right" vTextAlign="Middle">
+				<expression><![CDATA[$F{avg_order}]]></expression>
+			</element>
+			<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000067" x="684" y="0" width="114" height="18" forecolor="#000032" fontSize="9.0" pattern="#,##0" bold="true" hTextAlign="Right" vTextAlign="Middle">
+				<expression><![CDATA[$F{rev_per_1k}]]></expression>
+			</element>
+			<element kind="line" uuid="17a1b0b0-0001-0002-0003-000000000068" x="0" y="17" width="802" height="1" forecolor="#E1E5EA"/>
+		</band>
+	</detail>
+	<pageFooter height="16">
+		<element kind="textField" uuid="17a1b0b0-0001-0002-0003-000000000070" x="0" y="0" width="802" height="16" forecolor="#6C7882" fontSize="7.0" hTextAlign="Center">
+			<expression><![CDATA["Actian | Italy Regional Sales Bubble Map | Demo data (demo_italy_orders) | Page " + $V{PAGE_NUMBER}]]></expression>
+		</element>
+	</pageFooter>
+</jasperReport>
