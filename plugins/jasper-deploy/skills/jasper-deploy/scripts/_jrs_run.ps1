@@ -31,6 +31,8 @@
 #                                                             put a backup archive back (delete first when the
 #                                                             resource exists, because import update=true does
 #                                                             not overwrite a dashboard's companion files)
+#   @{ type = 'move';     from = '/reports/b/x'; toFolder = '/reports/a' }
+#                                                             move a relocated resource back (relocate_resource.ps1 -Move)
 #
 # Location: $env:JRS_RUNS_DIR, else <skill>/out/runs (gitignored).
 # Exit codes (jrsctl table): 0 ok, 2 precheck failed / nothing mutated,
@@ -241,6 +243,12 @@ function Invoke-JrsCompensation {
                 -ServerUrl $Jrs.ServerUrl -User $Jrs.User -Password $Jrs.Password | Out-Null
             return "re-imported $zip$note"
         }
+        "move" {
+            # undo a relocate_resource.ps1 -Move: move the resource back to its folder
+            $r = Invoke-JrsRelocate -Jrs $Jrs -Mode move -Source "$($Comp.from)" -TargetFolder "$($Comp.toFolder)"
+            if ("$($r.Code)" -notmatch '^2\d\d$') { throw "MOVE $($Comp.from) -> $($Comp.toFolder): HTTP $($r.Code)" }
+            return "MOVE $($Comp.from) -> $($Comp.toFolder) -> HTTP $($r.Code)"
+        }
         default { throw "unknown compensation type '$type'" }
     }
 }
@@ -262,6 +270,7 @@ function Invoke-JrsRollback {
         $what = switch ("$($p.Compensation.type)") {
             "delete"   { "DELETE $($p.Compensation.uri)" }
             "reimport" { "RE-IMPORT $($p.Compensation.zip)$(if ($p.Compensation.uri) { " -> $($p.Compensation.uri)" })" }
+            "move"     { "MOVE $($p.Compensation.from) -> $($p.Compensation.toFolder)" }
             default    { "?? $($p.Compensation.type)" }
         }
         Write-Host ("  [{0,3}] {1,-40} {2,-9} {3}" -f $n, $p.Step, $p.State, $what)

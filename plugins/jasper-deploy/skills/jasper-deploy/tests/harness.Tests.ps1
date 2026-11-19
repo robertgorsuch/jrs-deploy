@@ -157,6 +157,58 @@ Describe "recorded-server harness (mock_jrs.py + STAGE recording)" {
         (Get-Writes).Count | Should Be 0
     }
 
+    # --- relocate_resource.ps1 (copy / move) ------------------------------------
+    $relSrc = "/reports/_smoke/relocate/src/r"; $relDstFolder = "/reports/_smoke/relocate/dst"
+    function Set-MockResource([string]$Uri, [string]$Json) {
+        Invoke-WebRequest -UseBasicParsing -Method Put -Uri "$($script:dst)/rest_v2/resources$Uri" -Body $Json -ContentType "application/json" | Out-Null
+    }
+    function Get-MockStatus([string]$Uri) {
+        try { (Invoke-WebRequest -UseBasicParsing -Uri "$($script:dst)/rest_v2/resources$Uri").StatusCode } catch { [int]$_.Exception.Response.StatusCode }
+    }
+    $relArgs = @("-Source", $relSrc, "-TargetFolder", $relDstFolder) + $tgt
+
+    It "relocate_resource.ps1 (plan mode) exits 0 and issues GETs only" -Skip:(-not $script:haveTools) {
+        Set-MockResource $relSrc '{"label":"r"}'
+        Set-MockResource $relDstFolder '{"label":"dst"}'
+        Clear-Log
+        $r = Invoke-Skill "relocate_resource.ps1" ($relArgs + "-Move")
+        $r.Exit | Should Be 0
+        $r.Out | Should Match 'RELOCATE PLAN'
+        $r.Out | Should Match '\[plan\] nothing was written'
+        (Get-Writes).Count | Should Be 0
+    }
+
+    It "relocate_resource.ps1 -Move -Apply moves the resource and journals a move-back" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "relocate_resource.ps1" ($relArgs + @("-Move", "-Apply"))
+        $r.Exit | Should Be 0
+        @(Get-Writes | Where-Object { $_.method -eq "PUT" -and $_.path -like "/rest_v2/resources$relDstFolder*" }).Count | Should Be 1
+        Get-MockStatus "$relDstFolder/r" | Should Be 200
+        Get-MockStatus $relSrc | Should Be 404
+        $runDir = Get-ChildItem $script:runs -Directory | Sort-Object Name -Descending | Select-Object -First 1
+        (Get-Content (Join-Path $runDir.FullName "run.json") -Raw | ConvertFrom-Json).operation | Should Be "relocate"
+        (Get-Content (Join-Path $runDir.FullName "transitions.jsonl") -Raw) | Should Match '"type":"move"'
+    }
+
+    It "relocate_resource.ps1 refuses a target that already exists (exit 2, no writes)" -Skip:(-not $script:haveTools) {
+        Set-MockResource $relSrc '{"label":"r"}'          # "$relDstFolder/r" exists after the move above
+        Clear-Log
+        $r = Invoke-Skill "relocate_resource.ps1" ($relArgs + @("-Move", "-Apply"))
+        $r.Exit | Should Be 2
+        $r.Out | Should Match 'already exists'
+        (Get-Writes).Count | Should Be 0
+    }
+
+    It "recover_run.ps1 -Rollback -Apply moves it back (exit 3)" -Skip:(-not $script:haveTools) {
+        Invoke-WebRequest -UseBasicParsing -Method Delete -Uri "$($script:dst)/rest_v2/resources$relSrc" | Out-Null   # clear the re-seeded source
+        Clear-Log
+        $r = Invoke-Skill "recover_run.ps1" (@("-RunId", "latest", "-Rollback", "-Apply") + $tgt)
+        $r.Exit | Should Be 3
+        $r.Out | Should Match 'MOVE'
+        Get-MockStatus $relSrc | Should Be 200
+        Get-MockStatus "$relDstFolder/r" | Should Be 404
+    }
+
     if ($script:proc) { try { Stop-Process -Id $script:proc.Id -Force -ErrorAction SilentlyContinue } catch { } }
     [Environment]::SetEnvironmentVariable("JRS_RUNS_DIR", $null)
     Remove-Item $script:tmp -Recurse -Force -ErrorAction SilentlyContinue
