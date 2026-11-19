@@ -71,6 +71,10 @@ Describe "plan mode (Enter-JrsPlanMode / Restore-JrsPlanMode)" {
         (Invoke-JrsRest -Jrs $script:Dead -Method GET -Path "/rest_v2/serverInfo").Code | Should Be "000"
         (Invoke-JrsRest -Jrs $script:Dead -Method POST -Path "/rest_v2/export").Code | Should Be "000"
     }
+    It "Invoke-JrsRelocate is refused in plan mode before any request" {
+        Enter-JrsPlanMode -Apply:$false | Out-Null
+        { Invoke-JrsRelocate -Jrs $script:Dead -Mode move -Source "/a/r" -TargetFolder "/b" } | Should Throw "PLAN MODE"
+    }
 }
 
 Describe "PROD guard" {

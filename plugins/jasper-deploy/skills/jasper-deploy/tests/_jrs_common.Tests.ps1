@@ -155,3 +155,25 @@ Describe "Assert-JrsOk" {
         { Assert-JrsOk -Response @{ Code = '404'; Body = 'nope' } -Operation 'x' } | Should Throw
     }
 }
+
+$script:Dead = [pscustomobject]@{ ServerUrl = "http://127.0.0.1:9/jasperserver-pro"; User = "u"; Password = "p"; Env = $null; IsProd = $false }
+
+Describe "ConvertTo-JrsRepoUri" {
+    It "adds a leading slash and strips a trailing one" { ConvertTo-JrsRepoUri "reports/x/" | Should Be "/reports/x" }
+    It "collapses doubled slashes"                       { ConvertTo-JrsRepoUri "//reports//x" | Should Be "/reports/x" }
+    It "keeps the root"                                  { ConvertTo-JrsRepoUri "/" | Should Be "/" }
+}
+Describe "Invoke-JrsRelocate request shape" {
+    It "copy POSTs to the folder with Content-Location and createFolders=false" {
+        Mock Invoke-JrsRest { [pscustomobject]@{ Code = "201"; Body = "{}" } }
+        Invoke-JrsRelocate -Jrs $script:Dead -Mode copy -Source "/reports/a/r" -TargetFolder "/reports/b" | Out-Null
+        Assert-MockCalled Invoke-JrsRest -Times 1 -ParameterFilter {
+            $Method -eq "POST" -and $Path -eq "/rest_v2/resources/reports/b?createFolders=false" -and ($Headers -contains "Content-Location: /reports/a/r") }
+    }
+    It "move PUTs and adds overwrite=true only when asked" {
+        Mock Invoke-JrsRest { [pscustomobject]@{ Code = "201"; Body = "{}" } }
+        Invoke-JrsRelocate -Jrs $script:Dead -Mode move -Source "/reports/a/r" -TargetFolder "/reports/b" -Overwrite -CreateFolders | Out-Null
+        Assert-MockCalled Invoke-JrsRest -Times 1 -ParameterFilter {
+            $Method -eq "PUT" -and $Path -eq "/rest_v2/resources/reports/b?createFolders=true&overwrite=true" }
+    }
+}

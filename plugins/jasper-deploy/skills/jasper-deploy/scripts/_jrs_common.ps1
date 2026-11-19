@@ -53,8 +53,18 @@
                        services live at /rest_v2/jobs and /rest_v2/alerts with
                        their own application/<type>+json media types and (for
                        alerts) inverted PUT-creates / POST-modifies verbs.
-                       Returns { Code; Body }.
-  Resolve-JrLib      - locate the JasperReports 7 runtime jar dir
+                       Returns { Code; Body }. -Headers adds extra request
+                       headers ("Name: value" strings), e.g. Content-Location.
+  ConvertTo-JrsRepoUri - normalize a repository URI: leading "/", no doubled
+                       or trailing "/" ("/" stays "/").
+  Invoke-JrsRelocate - copy (POST) or move (PUT) ONE resource into a destination
+                       folder: /rest_v2/resources<TargetFolder>?createFolders=..
+                       with header Content-Location: <Source> (REST ref 10.0.0
+                       p.78-79; the result is <TargetFolder>/<source leaf>).
+                       createFolders defaults to FALSE so a typo cannot create
+                       stray folders. Goes through Invoke-JrsRest, so the write
+                       guard applies. Returns { Code; Body }.
+  Resolve-JrLib     - locate the JasperReports 7 runtime jar dir
                        (param -> env JR_LIB_DIR -> jrs.config jrLibDir -> default).
   Invoke-JrCompile   - compile a .jrxml to .jasper with CompileReport.java,
                        tolerating the harmless SLF4J-on-stderr that would
@@ -440,7 +450,8 @@ function Invoke-JrsRest {
         [string]$ContentType,                        # set for bodied requests
         [string]$Accept = "application/json",
         [string]$JsonFile,                           # optional request-body file (survives PS->curl quoting)
-        [string]$FormFile                            # optional multipart upload: curl -F "file=@<path>;type=application/zip" (import)
+        [string]$FormFile,                           # optional multipart upload: curl -F "file=@<path>;type=application/zip" (import)
+        [string[]]$Headers                           # extra request headers, each "Name: value" (e.g. Content-Location)
     )
     # Build the full literal URL in one string before handing it to curl: an
     # inline "$base?query=..." expression at the PowerShell->curl boundary can
@@ -457,12 +468,38 @@ function Invoke-JrsRest {
     if ($ContentType) { $cArgs += @("-H", "Content-Type: $ContentType") }
     if ($JsonFile)    { $cArgs += @("--data-binary", "@$JsonFile") }
     if ($FormFile)    { $cArgs += @("-F", "file=@$FormFile;type=application/zip") }
+    foreach ($h in @($Headers)) { if ($h) { $cArgs += @("-H", $h) } }
     $cArgs += $url
     $resp = & (Get-JrsCurl) @cArgs
     $lines = $resp -split "`n"
     $code = $lines[-1].Trim()
     $body = if ($lines.Length -ge 2) { ($lines[0..($lines.Length - 2)] -join "`n").Trim() } else { "" }
     return [pscustomobject]@{ Code = $code; Body = $body }
+}
+
+function ConvertTo-JrsRepoUri([string]$Uri) {
+    # "reports/x/" -> "/reports/x"; "//reports//x" -> "/reports/x"; "/" stays "/"
+    $u = ("/" + "$Uri".Trim()) -replace '/{2,}', '/'
+    if ($u.Length -gt 1) { $u = $u.TrimEnd("/") }
+    return $u
+}
+
+function Invoke-JrsRelocate {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Jrs,                          # object from Resolve-JrsConfig
+        [Parameter(Mandatory)][ValidateSet("copy", "move")][string]$Mode,
+        [Parameter(Mandatory)][string]$Source,               # resource to copy/move
+        [Parameter(Mandatory)][string]$TargetFolder,         # destination FOLDER; the leaf name is kept
+        [switch]$Overwrite,
+        [switch]$CreateFolders
+    )
+    $src = ConvertTo-JrsRepoUri $Source
+    $dst = ConvertTo-JrsRepoUri $TargetFolder
+    $method = if ($Mode -eq "copy") { "POST" } else { "PUT" }
+    $path = "/rest_v2/resources$dst" + "?createFolders=" + $(if ($CreateFolders) { "true" } else { "false" })
+    if ($Overwrite) { $path += "&overwrite=true" }
+    return Invoke-JrsRest -Jrs $Jrs -Method $method -Path $path -Headers @("Content-Location: $src")
 }
 
 function Invoke-JrsConnectionTest {

@@ -17,6 +17,10 @@ Behaviour (enough of REST v2 for the promote/compose/teardown/deploy scripts):
   * GET  /rest_v2/resources<uri>        -> recorded/created body, else JRS-style 404
   * PUT  /rest_v2/resources<uri>        -> 201 (or 200 when it existed), remembers the uri
   * DELETE /rest_v2/resources<uri>      -> 204 when known, else 404; forgets it
+  * POST|PUT /rest_v2/resources<folder> with a Content-Location: <src> header
+                                        -> copy (POST) / move (PUT, forgets src) to
+                                           <folder>/<leaf of src>; 201 + descriptor,
+                                           404 when src is unknown
   * POST /rest_v2/export                -> {id}, state finished, exportFile = a small
                                            valid archive (index.xml naming the uris)
   * POST /rest_v2/import                -> {id}, state finished; the uploaded
@@ -198,6 +202,23 @@ class Handler(BaseHTTPRequestHandler):
                 if uri in st.resources and "expanded=true" in split.query:
                     return self._send(200, st.resources[uri])
                 return self._send(404, {"message": "Resource %s not found." % uri, "errorCode": "resource.not.found"})
+            src_hdr = self.headers.get("Content-Location")
+            if src_hdr and method in ("POST", "PUT"):
+                # copy (POST) / move (PUT): the URL is the destination folder, the leaf is kept
+                src = "/" + "/".join(p for p in unquote(src_hdr).split("/") if p)
+                known = src in st.resources and src not in st.deleted
+                if not known:
+                    return self._send(404, {"message": "Resource %s not found." % src, "errorCode": "resource.not.found"})
+                target = uri.rstrip("/") + "/" + src.rsplit("/", 1)[-1]
+                with st.lock:
+                    doc = dict(st.resources[src])
+                    doc["uri"] = target
+                    st.resources[target] = doc
+                    st.deleted.discard(target)
+                    if method == "PUT":
+                        st.deleted.add(src)
+                        st.resources.pop(src, None)
+                return self._send(201, doc)
             if method == "PUT":
                 existed = uri in st.resources and uri not in st.deleted
                 try:
