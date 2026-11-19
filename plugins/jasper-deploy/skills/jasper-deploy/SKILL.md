@@ -103,6 +103,8 @@ that area** — the deep detail lives there, not here.
 | Hand-author/debug a Mondrian schema, XML/A, AGXML grants, MDX, OLAP engine tuning/cache flush | `create_mondrian.ps1` | `references/olap.md` |
 | UI theme (CSS) | `scaffold_theme.py` + `deploy_theme.ps1` | `references/data-and-semantic-layer.md` |
 | Schedule a job / set a data alert | `schedule_job.ps1`, `manage_alert.ps1` | `references/admin-and-scheduling.md` |
+| Pause / resume / restart jobs, read their state, snapshot + restore job states around an upgrade (**plans by default; `-Apply` writes**, journaled; never an empty id list, G66) | `schedule_job.ps1 -Action pause\|resume\|restart\|state\|snapshot\|restore` | `references/admin-and-scheduling.md` |
+| Copy or move ONE repository resource to another folder (**plans by default; `-Apply` writes**, journaled; refuses a move a dashboard depends on, G67) | `relocate_resource.ps1 -Source -TargetFolder [-Move] [-Apply]` | `references/admin-and-scheduling.md` |
 | Saved report options / clear a cache | `manage_options.ps1`, `manage_cache.ps1` | `references/admin-and-scheduling.md` |
 | Usage / access-event report (most-run, who-ran-what, last-accessed) | `report_usage.ps1` | `references/admin-and-scheduling.md` |
 | Generate a Visualize.js embed page for a report/dashboard/ad hoc view | `scaffold_visualize_embed.py` | `references/visualize-embedding.md` |
@@ -222,9 +224,10 @@ handling, and designer-authored dashboards are in `references/dashboards.md`.
   that block in YOUR scope and resets `$WhatIf`, `$Env`, ... to defaults (this is
   how a `promote.ps1 -WhatIf` wrote to PROD on 2026-08-28, gotcha G60). Shared
   functions live only in param-less files: `_jrs_common.ps1`,
-  `_controls_common.ps1` (input-control spec/ensure helpers) and `_jrs_run.ps1`
+  `_controls_common.ps1` (input-control spec/ensure helpers), `_jrs_run.ps1`
   (run journal, rollback plan/executor, `Export-JrsBackup`; dot-sourced by
-  `_jrs_common.ps1`). `tests/dotsource.Tests.ps1` enforces this.
+  `_jrs_common.ps1`) and `_jobs_common.ps1` (scheduler list/state/pause/resume,
+  snapshot/restore planning; also dot-sourced by `_jrs_common.ps1`). `tests/dotsource.Tests.ps1` enforces this.
 - **Existence checks:** `Invoke-JrsGet` returns `.Code` and never throws on 404;
   use `Test-JrsResource` / `Assert-JrsResource` (`_jrs_common.ps1`). Deploy scripts
   now emit a result object on the pipeline (Write-Host lines are NOT captured by

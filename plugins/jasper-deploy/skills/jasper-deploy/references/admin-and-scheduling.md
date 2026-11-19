@@ -83,6 +83,55 @@ delete round-trips, wired into `smoke_test.ps1`).
 `-OccurrenceCount -1` plus `-RecurrenceInterval`/`-RecurrenceIntervalUnit`
 (`MINUTE|HOUR|DAY|WEEK`). `-Parameters @{p="v"}` bakes in report params.
 
+### Pause / resume / restart, state, snapshot / restore (1.4.0)
+Plan by default; `-Apply` writes under a journaled run (undo with
+`recover_run.ps1 -RunId <id> -Rollback -Apply`). A prod profile also needs
+`$env:JRS_ALLOW_PROD_WRITE = '1'` set by a human.
+```powershell
+& $skill\schedule_job.ps1 -Action state  -Id 101,103            # read-only: id, state, next fire, label
+& $skill\schedule_job.ps1 -Action pause  -Id 101,103            # plan
+& $skill\schedule_job.ps1 -Action pause  -Id 101,103 -Apply     # pauses only the jobs that are NORMAL/EXECUTING
+& $skill\schedule_job.ps1 -Action resume -Id 101 -Apply         # missed triggers are NOT re-run
+& $skill\schedule_job.ps1 -Action pause  -All -Apply            # every job, as an explicit id list
+& $skill\schedule_job.ps1 -Action snapshot                      # read-only -> out\job-snapshots\<env>-<ts>.json
+& $skill\schedule_job.ps1 -Action restore -Snapshot <file> -Apply
+```
+- **Never an empty list (G66).** The REST service treats an empty pause/resume
+  list as "every job"; the script refuses one, and `-All` is expanded to ids.
+  Selecting nothing (no `-Id`, no `-All`) is an error.
+- Rollback of a pause resumes exactly the jobs that run paused; jobs that were
+  already paused stay paused.
+- `restart` is "restart FAILED jobs" (REST ref p.231-232): it creates a one-shot
+  copy of each listed job that is in an error state and runs it now. NORMAL,
+  EXECUTING and PAUSED jobs are skipped, `-All` is refused, and the run is
+  journaled as irreversible.
+- `restore` matches a snapshot job by id only when its label and report URI
+  also agree (after an export/import rebuild an id can belong to another job),
+  else by label + report URI (one match only); unmatched or vanished jobs are
+  listed and make the exit code 2. EXECUTING counts as running. A snapshot
+  taken on another server URL / env is refused (exit 2) unless
+  `-AllowOtherServer` (same scheduler under a new URL).
+- Changing a job's owner is not possible through the UI or REST. The KB's route
+  is a direct `UPDATE jireportjob SET owner = ...` on the repository database:
+  a DBA change after a DB backup, never run by the skill.
+
+## Copy / move a resource -- `relocate_resource.ps1` (1.4.0)
+Copy (POST) or move (PUT) ONE resource into another folder; it keeps its name.
+Plans by default; `-Apply` writes under a journaled run (rollback: delete the
+copy, re-import an overwritten target from its backup, or move it back).
+```powershell
+& $skill\relocate_resource.ps1 -Source /reports/a/county_summary -TargetFolder /reports/b           # plan
+& $skill\relocate_resource.ps1 -Source /reports/a/county_summary -TargetFolder /reports/b -Move -Apply
+& $skill\relocate_resource.ps1 -Source /reports/a/county_summary -TargetFolder /reports/new -CreateFolders -Apply
+```
+Refused with exit 2 and no write: missing source; folder source (v1 is single
+resources only); target folder equal to the source's folder; existing target
+without `-Overwrite`; `-Move -Overwrite`; the repository root; a move of a
+resource a dashboard uses (G67) or that scheduled jobs run; a missing target
+folder without `-CreateFolders`. The checks fail closed: when the folder,
+dashboard or job lookup cannot answer, the relocate is refused. A copy/move the
+server refuses (4xx) is journaled SKIPPED, so a rollback does not touch it.
+
 ## Data alert — `manage_alert.ps1`
 Fire a notification when a watched numeric report element crosses a threshold:
 ```powershell

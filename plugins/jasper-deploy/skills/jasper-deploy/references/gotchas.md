@@ -105,6 +105,10 @@ ASCII only. Terse on purpose.
 | G39 | wrapper aborts on a clean compile | SLF4J on stderr under `Stop` | check the output file, not the pipeline | [jrs-rest-api.md#g39](jrs-rest-api.md#g39) |
 | G40 | sync `/reports/{uri}.{fmt}` times out | blocking fill | async `reportExecutions` | [jrs-rest-api.md#g40](jrs-rest-api.md#g40) |
 | G41 | `/Type /Page` grep reads 0 on a good PDF | compressed page tree | 200 + magic bytes + size | [jrs-rest-api.md#g41](jrs-rest-api.md#g41) |
+| G66 | a pause/resume "of nothing" paused EVERY scheduled job | an empty `jobId` list on `/jobs/pause` or `/jobs/resume` means all jobs | never send an empty list; `schedule_job.ps1 -Id ... / -All` (explicit ids) | [jrs-rest-api.md#g66](jrs-rest-api.md#g66) |
+| G68 | resume said OK (`200`, ids echoed) but the jobs stayed PAUSED | the server ignored the resume (STAGE 10.0) | trust the state, not the echo: `Invoke-JrsJobBatch` re-reads states and fails; resume in the UI | [jrs-rest-api.md#g68](jrs-rest-api.md#g68) |
+| G69 | copy/move `500 "mediaType is null"` | no `Content-Type` header on a bodiless copy/move | send `Content-Type: application/json` (`Invoke-JrsRelocate` does) | [jrs-rest-api.md#g69](jrs-rest-api.md#g69) |
+| G67 | dashboard tiles broke after a report was moved | dashboards store tile URIs; a move leaves them dangling | `relocate_resource.ps1` refuses the move; copy, or recompose the dashboard | [jrs-rest-api.md#g67](jrs-rest-api.md#g67) |
 | G42 | uploaded image will not resolve via `repo:` | uploaded as `png`/`jpg` | `upload_file.ps1 -Type img` | [jrs-rest-api.md#g42](jrs-rest-api.md#g42) |
 | G56 | one-item list rejected (`ArrayList from String value`) | PS 5.1 `ConvertTo-Json` unwraps single-element arrays | `@()` / `-InputObject` / `,$arr`, or hand-built JSON | [jrs-rest-api.md#g56](jrs-rest-api.md#g56) |
 | G57 | inputControl PUT `Cannot deserialize ... from String "singleValue"` | write API wants numeric type codes | 2 single, 3 LOV, 4 query, 6 multi LOV, 7 multi query | [jrs-rest-api.md#g57](jrs-rest-api.md#g57) |

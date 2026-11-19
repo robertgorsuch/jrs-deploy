@@ -57,6 +57,30 @@ The backbone the skill scripts already use.
   `application/repository.<type>+json` content type and fields. Use these for a
   non-PostgreSQL/JDBC backend; the JDBC path is the one verified here.
 
+### resources: copy / move  **[verified on STAGE 10.0, 2026-11-19; ref 10.0.0 p.78-79]**
+Wrapped by `scripts/relocate_resource.ps1` (plan by default, `-Apply`, journaled;
+helper `Invoke-JrsRelocate` in `_jrs_common.ps1`).
+- **Copy:** `POST /resources/<destination folder>?createFolders=..&overwrite=..`
+  with header `Content-Location: <source uri>`; any body is ignored, **but a
+  `Content-Type` header is required** -- without one the server answers `500
+  "mediaType is null"` (G69; the script sends `application/json`). Success is
+  `200` + the new descriptor (the reference says `201`); `404
+  resource.not.found` when the source is not valid.
+- **Move:** the same with `PUT`; the source is removed.
+- The URL is the destination FOLDER and the resource keeps its name
+  (`<folder>/<leaf>`). `createFolders` defaults to `true` server-side; the script
+  sends `false` unless `-CreateFolders`. `overwrite=true` replaces an existing
+  target even of a different type.
+- An existing target without `overwrite` (copy or move): `400
+  resource.already.exists`, nothing changes. A missing destination folder with
+  `createFolders=false`: `404 folder.not.found`. `DELETE` of a resource that does
+  not exist answers `204`, not `404`.
+- **References follow a move.** A report unit's `dataSourceReference` is
+  rewritten to the datasource's new URI and the report still runs; a scheduled
+  job's `source.reportUnitURI` follows a moved report (its output folder does
+  not). Dashboards were not re-checked on STAGE; the script still refuses a
+  move that a dashboard (G67) or a scheduled job depends on.
+
 ## reports — synchronous run  **[verified]**
 - `GET /reports{uri}.{fmt}` — fill + export in one blocking call.
   Formats confirmed `200` here: **pdf, html, xlsx, csv, docx, pptx** (docs also
@@ -237,6 +261,26 @@ recurring, output formats, repo destination, optional mail).
 - `GET  /jobs/{id}` — full descriptor (`Accept: application/job+json`).
 - `DELETE /jobs/{id}` — `200`, echoes the id; afterward `GET /jobs/{id}` →
   `resource.not.found`.
+- **List shape [verified STAGE 10.0.0, 2026-11-18]:** `{"jobsummary":[{id, version,
+  label, reportUnitURI, reportLabel, description, state:{value, nextFireTime},
+  owner}]}`; `204` when there are none.
+- `GET /jobs/{id}/state` **[verified]** -- `{"nextFireTime":"...","value":"NORMAL"}`
+  (JSON and XML); `value` is `NORMAL | EXECUTING | PAUSED | <error state>`;
+  `404` when the job does not exist or is no longer active (ref p.225).
+- `POST /jobs/pause`, `/jobs/resume`, `/jobs/restart` (ref p.229-232) -- body
+  `{"jobId":[1236,1240]}`; `200` echoes the ids acted on; unknown ids are
+  ignored without error. **An EMPTY body or list on pause/resume acts on EVERY
+  job in the scheduler (G66).** Resume does not run triggers missed while the
+  job was paused. **On STAGE 10.0 (2026-11-19) `/jobs/resume` answered `200`
+  with the ids echoed while the jobs stayed `PAUSED` (G68)**, so
+  `Invoke-JrsJobBatch` re-reads every job's state after pause/resume and throws
+  when the change did not take effect. Wrapped by `schedule_job.ps1 -Action pause|resume|restart|state|
+  snapshot|restore` (helpers in `_jobs_common.ps1`); the empty-list case is
+  refused client-side.
+- Job ownership cannot be changed through the UI or REST; the KB's only route is
+  a direct `UPDATE jireportjob SET owner = ...` on the repository database (KB
+  *transferring-ownership-scheduled-report-jobs*). That is a DBA change with a DB
+  backup first, so the skill documents it and does not automate it.
 
 ## permissions  **[verified]** (set → confirm → restore round-trip)
 A resource with no explicit ACL returns `204` and inherits from its parent
@@ -626,6 +670,40 @@ Handled-by (the script or flag that already deals with it). ASCII only.
 - Handled-by: `deploy_report.ps1` (`-Control`, `-QueryControl`,
   `-QueryMultiControl`); the inputControls section above documents the
   round-trip.
+
+### G66
+An EMPTY job-id list pauses or resumes EVERY job. `POST /rest_v2/jobs/pause` or
+`/jobs/resume` with an empty body, `{}`, or `{"jobId":[]}` acts on all jobs in the
+scheduler (REST ref 10.0.0 p.229-231), so a script whose id filter matched
+nothing would pause the whole server. `Invoke-JrsJobBatch` (`_jobs_common.ps1`)
+refuses an empty list before sending anything, and `schedule_job.ps1 -All`
+expands "all" into an explicit id list (the journal then records the exact ids,
+and a rollback resumes only those).
+
+### G67
+Moving a resource breaks the dashboards that use it. Dashboards store their tiles'
+report URIs in their own descriptor/companion files, so after a move the
+dashboard points at a URI that no longer exists. `relocate_resource.ps1 -Move`
+checks `Get-JrsDashboardsReferencing` and refuses (exit 2); copy the report
+instead, or recompose the dashboard against the new URI. (Not re-verified on
+STAGE: there, a report's datasource reference and a job's report URI DID follow
+a move, 2026-11-19.)
+
+### G68
+`POST /rest_v2/jobs/resume` can report success without resuming anything. On
+STAGE (JRS 10.0, 2026-11-19) it answered `200 {"jobId":[...]}` for paused jobs,
+repeatedly and with no server log entry, while `/jobs/{id}/state` and the Quartz
+`qrtz_triggers.trigger_state` stayed `PAUSED`; pause worked. The echo is
+therefore not proof: `Invoke-JrsJobBatch` re-reads each job's state after a
+pause/resume and throws ("did not take effect"), so `schedule_job.ps1` exits 4
+and a rollback that needs a resume reports ROLLBACK_INCOMPLETE. Resume such jobs
+in the UI (or ask support) and confirm with `schedule_job.ps1 -Action state`.
+
+### G69
+A copy/move without a `Content-Type` fails with `500 "Cannot invoke
+MediaType.getSubtype() because mediaType is null"` (STAGE 10.0, 2026-11-19), even
+though the request has no body and the reference says any body is ignored.
+`Invoke-JrsRelocate` sends `Content-Type: application/json`.
 
 ## Gotchas: export/import, permissions/admin, alerts/options/run, environment
 

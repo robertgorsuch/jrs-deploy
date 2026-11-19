@@ -17,14 +17,24 @@ Behaviour (enough of REST v2 for the promote/compose/teardown/deploy scripts):
   * GET  /rest_v2/resources<uri>        -> recorded/created body, else JRS-style 404
   * PUT  /rest_v2/resources<uri>        -> 201 (or 200 when it existed), remembers the uri
   * DELETE /rest_v2/resources<uri>      -> 204 when known, else 404; forgets it
+  * POST|PUT /rest_v2/resources<folder> with a Content-Location: <src> header
+                                        -> copy (POST) / move (PUT, forgets src) to
+                                           <folder>/<leaf of src>; 201 + descriptor,
+                                           404 when src is unknown
   * POST /rest_v2/export                -> {id}, state finished, exportFile = a small
                                            valid archive (index.xml naming the uris)
   * POST /rest_v2/import                -> {id}, state finished; the uploaded
                                            archive's index.xml <resource> uris become
                                            known (so a composed dashboard "appears")
+  * with --jobs <fixture.json> a stateful scheduler:
+      GET  /rest_v2/jobs[?reportUnitURI=]  -> {"jobsummary":[...]} (204 when none)
+      GET  /rest_v2/jobs/{id}/state        -> {"value", "nextFireTime"} or 404
+      POST /rest_v2/jobs/pause|resume|restart {"jobId":[..]} -> echoes the known ids;
+           an EMPTY list acts on every job, like the real server, so a regression
+           shows up in the states (the log line carries "jobIds": <count sent>)
   * anything else                       -> 404 {"errorCode":"mock.unmapped"}
 
-The log line: {"ts","method","path","status"}. Auth headers are ignored and
+The log line: {"ts","method","path","status"} (+ "jobIds" for job batch POSTs). Auth headers are ignored and
 never logged.
 """
 import argparse
@@ -37,7 +47,7 @@ import threading
 import time
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit, unquote
+from urllib.parse import urlsplit, unquote, parse_qs
 
 DEFAULT_SERVER_INFO = {
     "version": "10.0.0", "edition": "PRO", "build": "mock", "licenseType": "Commercial",
@@ -57,6 +67,7 @@ class State:
         self.exports = {}           # id -> uris
         self.imports = {}           # id -> uris
         self.counter = 0
+        self.jobs = None            # id -> job dict, only when --jobs gives a fixture
         self.recording_dir = recording_dir
         if recording_dir:
             mp = os.path.join(recording_dir, "mappings.json")
@@ -75,8 +86,15 @@ class State:
             self.counter += 1
             return "%s-%d" % (prefix, self.counter)
 
-    def log(self, method, path, status):
-        line = json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "method": method, "path": path, "status": status})
+    def load_jobs(self, path):
+        with io.open(path, encoding="utf-8-sig") as f:
+            self.jobs = {int(j["id"]): dict(j) for j in json.load(f)}
+
+    def log(self, method, path, status, extra=None):
+        rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "method": method, "path": path, "status": status}
+        if extra:
+            rec.update(extra)
+        line = json.dumps(rec)
         with self.lock:
             with io.open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
@@ -166,8 +184,9 @@ class Handler(BaseHTTPRequestHandler):
         st = self.state
         full = self._path()
         body = self._read_body()
+        self._log_extra = None
         status = self._dispatch(method, full, body)
-        st.log(method, full, status)
+        st.log(method, full, status, self._log_extra)
 
     def _recorded(self, method, full):
         m = self.state.mappings.get((method, full))
@@ -197,7 +216,31 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, st.resources[uri])
                 if uri in st.resources and "expanded=true" in split.query:
                     return self._send(200, st.resources[uri])
+                if uri == "/" and split.query:
+                    # an unrecorded repository SEARCH (folderUri/type/q): answer "no results"
+                    # like the real server does, rather than a 404 that callers read as an error
+                    return self._send(204)
                 return self._send(404, {"message": "Resource %s not found." % uri, "errorCode": "resource.not.found"})
+            src_hdr = self.headers.get("Content-Location")
+            if src_hdr and method in ("POST", "PUT"):
+                if not self.headers.get("Content-Type"):
+                    # JRS 10.0 (STAGE, 2026-11-19): a copy/move without a Content-Type 500s
+                    return self._send(500, {"message": "Cannot invoke \"jakarta.ws.rs.core.MediaType.getSubtype()\" because \"mediaType\" is null", "errorCode": "generic.error.message"})
+                # copy (POST) / move (PUT): the URL is the destination folder, the leaf is kept
+                src = "/" + "/".join(p for p in unquote(src_hdr).split("/") if p)
+                known = src in st.resources and src not in st.deleted
+                if not known:
+                    return self._send(404, {"message": "Resource %s not found." % src, "errorCode": "resource.not.found"})
+                target = uri.rstrip("/") + "/" + src.rsplit("/", 1)[-1]
+                with st.lock:
+                    doc = dict(st.resources[src])
+                    doc["uri"] = target
+                    st.resources[target] = doc
+                    st.deleted.discard(target)
+                    if method == "PUT":
+                        st.deleted.add(src)
+                        st.resources.pop(src, None)
+                return self._send(201, doc)
             if method == "PUT":
                 existed = uri in st.resources and uri not in st.deleted
                 try:
@@ -256,6 +299,41 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/rest_v2/import/([^/]+)/state$", path)
         if m and method == "GET":
             return self._send(200, {"id": m.group(1), "phase": "finished", "message": "Import succeeded.", "warnings": []})
+        # --- scheduler (only with --jobs) ---------------------------------------
+        if st.jobs is not None and path.startswith("/rest_v2/jobs"):
+            p = path.rstrip("/")
+            if p == "/rest_v2/jobs" and method == "GET":
+                q = parse_qs(split.query).get("reportUnitURI", [None])[0]
+                items = [j for _, j in sorted(st.jobs.items()) if not q or j.get("reportUnitURI") == q]
+                if not items:
+                    return self._send(204)
+                return self._send(200, {"jobsummary": [
+                    {"id": j["id"], "version": 0, "label": j.get("label"), "reportUnitURI": j.get("reportUnitURI"),
+                     "owner": j.get("owner"), "state": {"value": j.get("state", "NORMAL")}} for j in items]})
+            m = re.match(r"^/rest_v2/jobs/(\d+)/state$", p)
+            if m and method == "GET":
+                j = st.jobs.get(int(m.group(1)))
+                if j is None:
+                    return self._send(404, {"message": "Job not found", "errorCode": "resource.not.found"})
+                return self._send(200, {"nextFireTime": "2030-01-01T00:00:00-08:00", "value": j.get("state", "NORMAL")})
+            m = re.match(r"^/rest_v2/jobs/(pause|resume|restart)$", p)
+            if m and method == "POST":
+                action = m.group(1)
+                try:
+                    ids = [int(i) for i in (json.loads(body.decode("utf-8-sig")).get("jobId") or [])] if body else []
+                except Exception:
+                    ids = []
+                self._log_extra = {"jobIds": len(ids)}
+                if not ids and action in ("pause", "resume"):
+                    ids = sorted(st.jobs)          # mirror the real server: an empty list means EVERY job
+                acted = [i for i in ids if i in st.jobs]
+                with st.lock:
+                    for i in acted:
+                        if action == "pause":
+                            st.jobs[i]["state"] = "PAUSED"
+                        elif action == "resume" and st.jobs[i].get("state") == "PAUSED":
+                            st.jobs[i]["state"] = "NORMAL"
+                return self._send(200, {"jobId": acted})
         # --- anything recorded (jobs, permissions, ...) --------------------------
         r = self._recorded(method, full)
         if r is not None:
@@ -274,8 +352,11 @@ def main():
     ap.add_argument("--recording", default=None, help="directory holding mappings.json (optional)")
     ap.add_argument("--log", required=True, help="request log (JSON lines, appended)")
     ap.add_argument("--webapp", default="/jasperserver-pro")
+    ap.add_argument("--jobs", default=None, help="JSON fixture [{id,label,reportUnitURI,owner,state}] enabling a stateful scheduler")
     a = ap.parse_args()
     Handler.state = State(a.recording, a.log, a.webapp)
+    if a.jobs:
+        Handler.state.load_jobs(a.jobs)
     with io.open(a.log, "a", encoding="utf-8"):
         pass
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)

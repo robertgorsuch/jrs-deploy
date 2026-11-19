@@ -103,6 +103,25 @@ Describe "run journal" {
         @(Get-JrsRuns).Count | Should Be 2
     }
 
+    Context "two runs in the same second" {
+        # Run ids have 1-second resolution plus a random suffix, so the name alone
+        # does not order runs started in the same second (seen on fast CI runners:
+        # rollback of 'latest' undid the wrong run). The ms startedAt decides.
+        $script:fakeIds = [System.Collections.Queue]::new(@("r-20261118-120000-ffff", "r-20261118-120000-0000"))
+        Mock New-JrsRunId { $script:fakeIds.Dequeue() }
+        It "'latest' and Get-JrsRuns order by startedAt, not by the random suffix" {
+            Get-ChildItem $script:Runs -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+            $first = New-JrsRun -Operation "first" -Target $script:Target -Mode apply
+            Complete-JrsRun -Run $first -Status SUCCEEDED
+            Start-Sleep -Milliseconds 50
+            $second = New-JrsRun -Operation "second" -Target $script:Target -Mode apply
+            Complete-JrsRun -Run $second -Status SUCCEEDED
+            $second.RunId | Should Be "r-20261118-120000-0000"
+            (Get-JrsRun -RunId latest).Operation | Should Be "second"
+            @(Get-JrsRuns)[0].Operation | Should Be "second"
+        }
+    }
+
     It "Get-JrsRollbackPlan returns compensations newest-first for steps that ran, skipping compensated and irreversible ones" {
         $run = New-JrsRun -Operation "promote" -Target $script:Target -Mode apply
         Write-JrsStep -Run $run -Step "1" -State SUCCEEDED -Compensation @{ type = "reimport"; zip = "a.zip" }
@@ -128,5 +147,28 @@ Describe "run journal" {
         $plan = @(Get-JrsRollbackPlan -Run (Get-JrsRun -RunId $run.RunId))
         $plan.Count | Should Be 1
         $plan[0].Step | Should Be "1"
+    }
+}
+
+Describe "jobs compensations" {
+    Context "empty ids" {
+        It "a jobs-resume compensation with no ids sends nothing" {
+            Mock Invoke-JrsJobBatch { throw "must not be called" }
+            $d = Invoke-JrsCompensation -Jrs $script:Target -Comp ([pscustomobject]@{ type = "jobs-resume"; ids = @() })
+            "$d" | Should Match "no jobs"
+            Assert-MockCalled Invoke-JrsJobBatch -Times 0
+        }
+    }
+    Context "ids" {
+        It "a jobs-resume compensation resumes exactly its ids" {
+            Mock Invoke-JrsJobBatch { [int[]]@(101, 104) }
+            Invoke-JrsCompensation -Jrs $script:Target -Comp ([pscustomobject]@{ type = "jobs-resume"; ids = @(101, 104) }) | Out-Null
+            Assert-MockCalled Invoke-JrsJobBatch -Times 1 -ParameterFilter { $Action -eq "resume" -and ($Ids -join ",") -eq "101,104" }
+        }
+        It "a jobs-pause compensation pauses exactly its ids" {
+            Mock Invoke-JrsJobBatch { [int[]]@(7) }
+            Invoke-JrsCompensation -Jrs $script:Target -Comp ([pscustomobject]@{ type = "jobs-pause"; ids = @(7) }) | Out-Null
+            Assert-MockCalled Invoke-JrsJobBatch -Times 1 -ParameterFilter { $Action -eq "pause" }
+        }
     }
 }
