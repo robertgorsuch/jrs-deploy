@@ -21,7 +21,9 @@
   scheduler, REST ref 10.0.0 p.229-231, so the script never sends one). These
   PLAN by default and write only with -Apply, journaled under out\runs so
   recover_run.ps1 -RunId <id> -Rollback -Apply undoes them (pause <-> resume of
-  exactly the jobs the run changed; restart is irreversible). Resume does not
+  exactly the jobs the run changed). restart is "restart FAILED jobs" (REST ref
+  p.231-232): it creates a one-shot copy of each listed job in an error state;
+  other jobs are skipped, -All is refused, and it is journaled as irreversible. Resume does not
   re-run triggers missed while a job was paused. `state` is read-only.
   A prod profile additionally needs $env:JRS_ALLOW_PROD_WRITE = '1'.
 
@@ -37,6 +39,10 @@
 
 .PARAMETER Snapshot
   restore: the snapshot file written by -Action snapshot.
+
+.PARAMETER AllowOtherServer
+  restore: accept a snapshot taken on another server URL / env (same scheduler
+  under a new URL after a side-by-side upgrade). Refused without it (exit 2).
 
 .PARAMETER Out
   snapshot: output file (default out\job-snapshots\<env|host-port>-<timestamp>.json).
@@ -128,6 +134,7 @@ param(
     [string]$Env,
     [string]$Snapshot,
     [string]$Out,
+    [switch]$AllowOtherServer,
     [string]$Label,
     [ValidateSet("now", "at")]
     [string]$StartType,
@@ -174,13 +181,22 @@ if ($Action -eq "restore") {
     if (-not (Test-Path $Snapshot)) { throw "snapshot not found: $Snapshot" }
     $snap = Get-Content $Snapshot -Raw | ConvertFrom-Json
     $where = "$($jrs.ServerUrl)$(if ($jrs.Env) { " [env $($jrs.Env)]" })"
+    $sameServer = ("$($snap.server)".TrimEnd("/") -eq "$($jrs.ServerUrl)".TrimEnd("/")) -and ("$($snap.env)" -eq "$($jrs.Env)")
+    if (-not $sameServer -and -not $AllowOtherServer) {
+        Write-Host "PRECHECK FAILED: snapshot $Snapshot was taken on $($snap.server)$(if ($snap.env) { " [env $($snap.env)]" }), not on $where."
+        Write-Host "Job ids would be matched against an unrelated scheduler. If this is the same scheduler under a new URL (side-by-side upgrade), pass -AllowOtherServer."
+        Write-Host "nothing was written"
+        exit 2
+    }
+    if (-not $sameServer) { Write-Host "WARNING: -AllowOtherServer: restoring a snapshot from $($snap.server) onto $where" }
     $current = @(Get-JrsJobList -Jrs $jrs | ForEach-Object {
         [pscustomobject]@{ Id = $_.Id; Label = $_.Label; ReportUnitURI = $_.ReportUnitURI; Value = (Get-JrsJobState -Jrs $jrs -Id $_.Id).Value } })
     $plan = @(Get-JrsJobRestorePlan -Snapshot $snap -Current $current)
     Write-Host ""
     Write-Host "JOBS RESTORE PLAN from $Snapshot (taken $($snap.takenAt) on $($snap.server)) to $where"
     foreach ($row in $plan) {
-        Write-Host ("  [{0,-6}] {1,-10} was {2,-8} now {3,-9} -> {4,-10} {5}" -f $row.Id, "$($row.Label)", $row.Was, $row.Now, $row.Act, $(if ($row.MatchedBy -and $row.MatchedBy -ne "id") { "(matched by $($row.MatchedBy))" } else { "" }))
+        $lbl = if ($row.CurrentLabel -and $row.CurrentLabel -ne $row.Label) { "$($row.Label) (now: $($row.CurrentLabel))" } else { "$($row.Label)" }
+        Write-Host ("  [{0,-6}] {1,-10} was {2,-8} now {3,-9} -> {4,-10} {5}" -f $row.Id, $lbl, $row.Was, $row.Now, $row.Act, $(if ($row.MatchedBy -and $row.MatchedBy -ne "id") { "(matched by $($row.MatchedBy))" } else { "" }))
     }
     $unresolved = @($plan | Where-Object { $_.Act -eq "unresolved" })
     $batches = @(
@@ -230,6 +246,7 @@ if ($Action -eq "restore") {
 }
 
 if ($Action -in "pause", "resume", "restart", "state") {
+    if ($Action -eq "restart" -and $All) { throw "restart -All is refused: restart creates a one-shot copy of each listed failed job; pass the failed job ids with -Id" }
     $where = "$($jrs.ServerUrl)$(if ($jrs.Env) { " [env $($jrs.Env)]" })"
     $targets = Resolve-JrsJobTargets -Jrs $jrs -Ids $ids -All:$All
     $labels = @{}
@@ -242,9 +259,7 @@ if ($Action -in "pause", "resume", "restart", "state") {
     }
 
     if ($Action -eq "restart") {
-        $plan = @($states | ForEach-Object {
-            if ($_.Value -eq "MISSING") { [pscustomobject]@{ Id = $_.Id; From = $_.Value; Act = "skip"; Reason = "job not found" } }
-            else { [pscustomobject]@{ Id = $_.Id; From = $_.Value; Act = "restart"; Reason = "fires the job now" } } })
+        $plan = @(Get-JrsJobRestartPlan -States $states)
     } else {
         $plan = @(Get-JrsJobTransitionPlan -States $states -Action $Action)
     }
@@ -271,7 +286,7 @@ if ($Action -in "pause", "resume", "restart", "state") {
             $step = "jobs-${Action}:" + ($acting -join ",")
             try {
                 if ($Action -eq "restart") {
-                    Write-JrsStep -Run $run -Step $step -State RUNNING -Irreversible "restart fires the job now"
+                    Write-JrsStep -Run $run -Step $step -State RUNNING -Irreversible "restart runs a one-shot copy of each failed job now"
                 } else {
                     $inverse = if ($Action -eq "pause") { "jobs-resume" } else { "jobs-pause" }
                     Write-JrsStep -Run $run -Step $step -State RUNNING -Compensation @{ type = $inverse; ids = @($acting) }

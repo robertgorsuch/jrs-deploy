@@ -8,25 +8,31 @@ Validated offline only (Pester + `tests/mock_jrs.py`); the STAGE acceptance run
 (plan Task 7) is still to do. PROD was not contacted.
 
 ### Scheduler control (`schedule_job.ps1`)
-- New actions `pause`, `resume`, `restart` (`-Id 101,103` or `-All`), plan by
-  default, `-Apply` to write, journaled: rollback resumes / re-pauses exactly the
-  jobs the run changed; `restart` is journaled as irreversible.
+- New actions `pause`, `resume` (`-Id 101,103` or `-All`) and `restart`
+  (failed jobs only: the endpoint creates a one-shot copy of each; `-All`
+  refused), plan by default, `-Apply` to write, journaled: rollback resumes /
+  re-pauses exactly the jobs the run changed; `restart` is irreversible.
 - **Never an empty id list** (G66): the REST service treats an empty
   pause/resume list as every job. `Invoke-JrsJobBatch` refuses one; `-All` is
   expanded client-side into explicit ids.
 - `state` (read-only), `snapshot` (read-only, PROD-safe, `out/job-snapshots/`)
-  and `restore -Snapshot <file>` (matches by id, else label + report URI;
-  unmatched jobs exit 2) for upgrade windows, including the 7.5.1 -> 7.9.2+
-  upgrade that resumes paused jobs.
+  and `restore -Snapshot <file>` (an id match needs the label + report to agree,
+  else label + report URI; unmatched jobs exit 2; a snapshot from another
+  server needs `-AllowOtherServer`) for upgrade windows, including the
+  7.5.1 -> 7.9.2+ upgrade that resumes paused jobs.
 - `-Id` accepts several ids (array or "101,103"); `-Env` passthrough added.
 - New helper file `scripts/_jobs_common.ps1` (dot-sourced by `_jrs_common.ps1`).
 
 ### Repository copy / move (`relocate_resource.ps1`, new)
 - Copy (POST) or move (PUT) one resource with `Content-Location`, plan by
   default, `-Apply` to write, journaled (delete / reimport / move-back
-  compensations). Prechecks refuse folders, no-op targets, existing targets
-  without `-Overwrite`, `-Move -Overwrite`, moves a dashboard depends on (G67),
-  and missing target folders without `-CreateFolders`.
+  compensations). Prechecks refuse folders, the root, no-op targets, existing
+  targets without `-Overwrite`, `-Move -Overwrite`, moves a dashboard (G67) or a
+  scheduled job depends on, and missing target folders without
+  `-CreateFolders`; they fail closed when a lookup cannot answer. A copy/move
+  the server refuses (4xx) is journaled SKIPPED (nothing to roll back).
+- `Get-JrsDashboardsReferencing -Strict` throws instead of returning "none"
+  when the dashboard listing fails or may be truncated.
 - `_jrs_common.ps1`: `Invoke-JrsRest -Headers`, `ConvertTo-JrsRepoUri`,
   `Invoke-JrsRelocate`. New compensation types `move`, `jobs-pause`,
   `jobs-resume` in `_jrs_run.ps1`.
@@ -36,7 +42,7 @@ Validated offline only (Pester + `tests/mock_jrs.py`); the STAGE acceptance run
   (synthetic fixture `tests/fixtures/jobs/jobs.json`; an empty list acts on all
   jobs, like the real server).
 - New `tests/relocate_resource.Tests.ps1`, `tests/jobs_common.Tests.ps1`; harness
-  and run-journal tests extended (205 passed, 0 failed on Windows PowerShell 5.1 /
+  and run-journal tests extended (219 passed, 0 failed on Windows PowerShell 5.1 /
   Pester 3.4).
 - `references/jrs-rest-api.md` (jobs list/state/pause/resume formats, copy/move,
   G66, G67), `gotchas.md`, `admin-and-scheduling.md`,

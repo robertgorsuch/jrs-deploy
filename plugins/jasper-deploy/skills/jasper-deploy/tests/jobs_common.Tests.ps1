@@ -152,3 +152,37 @@ Describe "Get-JrsJobRestorePlan" {
         $p[0].Id | Should Be 101
     }
 }
+
+Describe "final-review fixes: restore matching" {
+    function Snap($jobs) { [pscustomobject]@{ jobs = @($jobs) } }
+    function SJ($id, $state, $label = "t_job_a", $uri = "/reports/t/r1") { [pscustomobject]@{ id = $id; label = $label; reportUnitURI = $uri; state = $state } }
+    function CJ($id, $value, $label = "t_job_a", $uri = "/reports/t/r1") { [pscustomobject]@{ Id = $id; Label = $label; ReportUnitURI = $uri; Value = $value } }
+
+    It "does not trust an id match whose label/report differ (id reused after a rebuild)" {
+        $p = @(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @(CJ 101 "NORMAL" "other" "/reports/x"))
+        $p[0].Act | Should Be "unresolved"
+    }
+    It "falls back to label + report when the id now belongs to another job" {
+        $p = @(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @((CJ 101 "NORMAL" "other" "/reports/x"), (CJ 555 "NORMAL")))
+        $p[0].Id | Should Be 555
+        $p[0].Act | Should Be "pause"
+        $p[0].MatchedBy | Should Be "label+uri"
+    }
+    It "reports the current job's label" {
+        $p = @(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @((CJ 555 "NORMAL")))
+        $p[0].CurrentLabel | Should Be "t_job_a"
+    }
+    It "treats EXECUTING as running (re-pauses a job the upgrade resumed and that is running now)" {
+        (@(Get-JrsJobRestorePlan -Snapshot (Snap (SJ 101 "PAUSED")) -Current @(CJ 101 "EXECUTING")))[0].Act | Should Be "pause"
+    }
+}
+
+Describe "final-review fixes: restart only failed jobs" {
+    $s = @([pscustomobject]@{Id=1;Value="NORMAL"}, [pscustomobject]@{Id=2;Value="PAUSED"}, [pscustomobject]@{Id=3;Value="EXECUTING"},
+           [pscustomobject]@{Id=4;Value="MISSING"}, [pscustomobject]@{Id=5;Value="ERROR"})
+    It "plans a restart only for jobs in an error state" {
+        $p = @(Get-JrsJobRestartPlan -States $s)
+        (@($p | Where-Object Act -eq "restart").Id -join ",") | Should Be "5"
+        ($p | Where-Object Id -eq 1).Reason | Should Match "not failed"
+    }
+}

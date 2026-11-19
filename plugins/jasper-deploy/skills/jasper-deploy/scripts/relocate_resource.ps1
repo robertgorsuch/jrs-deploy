@@ -78,16 +78,28 @@ function Get-JrsParentUri([string]$Uri) {
 }
 
 function Test-JrsIsFolder {
-    # $true when $Uri is a folder: a non-recursive search of its parent for
-    # folders lists it (first 1000 sub-folders). Any non-200 (204 none, 404,
-    # unreachable) counts as "not a folder".
+    # "yes" | "no" | "unknown". A non-recursive search of the parent for folders
+    # (first 1000) lists $Uri -> "yes"; a clean answer without it (200, or 204 =
+    # the parent has no sub-folders) -> "no"; any other answer (error, bad body)
+    # -> "unknown", which the caller treats as a failed precheck (fail closed).
     [CmdletBinding()]
     param([Parameter(Mandatory)]$Jrs, [Parameter(Mandatory)][string]$Uri)
     $parent = Get-JrsParentUri $Uri
-    $r = Invoke-JrsRest -Jrs $Jrs -Method GET -Path ("/rest_v2/resources?folderUri=" + $parent + "&type=folder&recursive=false&limit=1000")
-    if ("$($r.Code)".Trim() -ne "200" -or -not $r.Body) { return $false }
-    try { $items = @(($r.Body | ConvertFrom-Json).resourceLookup) } catch { return $false }
-    return [bool](@($items | Where-Object { $_.uri -eq $Uri }).Count)
+    $r = Invoke-JrsRest -Jrs $Jrs -Method GET -Path ("/rest_v2/resources?folderUri=" + [uri]::EscapeDataString($parent) + "&type=folder&recursive=false&limit=1000")
+    $code = "$($r.Code)".Trim()
+    if ($code -eq "204") { return "no" }
+    if ($code -ne "200" -or -not $r.Body) { return "unknown" }
+    try { $items = @(($r.Body | ConvertFrom-Json).resourceLookup) } catch { return "unknown" }
+    if (@($items | Where-Object { $_.uri -eq $Uri }).Count) { return "yes" }
+    return "no"
+}
+
+function Get-JrsRelocateFailState([string]$Code) {
+    # A 4xx means the server refused the copy/move: nothing changed, so the step
+    # is SKIPPED and its compensation is never replayed. Anything else (5xx,
+    # 000 = no answer) is ambiguous and stays FAILED with its compensation.
+    if ("$Code".Trim() -match '^4\d\d$') { return "SKIPPED" }
+    return "FAILED"
 }
 
 function Get-JrsRelocatePlan {
@@ -108,15 +120,24 @@ function Get-JrsRelocatePlan {
     $problems = @()
     $targetExists = $false
 
+    if ($src -eq "/") { $problems += "source is the repository root; refusing to copy or move it" }
     if ($Move -and $Overwrite) { $problems += "-Move with -Overwrite is not supported (its rollback would need a move plus a reimport); copy with -Overwrite, or remove the target first" }
     if ((Get-JrsParentUri $src) -eq $dst) { $problems += "target folder $dst is the source's own folder (no-op)" }
     if (-not (Test-JrsResource -Jrs $Jrs -Uri $src)) {
         $problems += "source $src not found on $($Jrs.ServerUrl)"
     } else {
-        if (Test-JrsIsFolder -Jrs $Jrs -Uri $src) { $problems += "source $src is a folder; v1 relocates single resources only" }
+        $isFolder = Test-JrsIsFolder -Jrs $Jrs -Uri $src
+        if ($isFolder -eq "yes") { $problems += "source $src is a folder; v1 relocates single resources only" }
+        elseif ($isFolder -ne "no") { $problems += "could not verify that source $src is not a folder (folder search failed); refusing" }
         if ($Move) {
-            $dash = @(Get-JrsDashboardsReferencing -Jrs $Jrs -Uri $src)
-            if ($dash.Count) { $problems += "dashboard(s) reference $src and would break if it moved: $($dash -join ', ')" }
+            try {
+                $dash = @(Get-JrsDashboardsReferencing -Jrs $Jrs -Uri $src -Strict)
+                if ($dash.Count) { $problems += "dashboard(s) reference $src and would break if it moved: $($dash -join ', ')" }
+            } catch { $problems += "could not verify which dashboards reference ${src}: $_" }
+            try {
+                $jobs = @(Get-JrsJobList -Jrs $Jrs -ReportUri $src)
+                if ($jobs.Count) { $problems += "$($jobs.Count) scheduled job(s) run $src and would fail after a move (ids $(($jobs | ForEach-Object { $_.Id }) -join ',')); move or delete those jobs first" }
+            } catch { $problems += "could not verify which scheduled jobs run ${src}: $_" }
         }
     }
     if ($target -ne $src -and (Test-JrsResource -Jrs $Jrs -Uri $target)) {
@@ -175,7 +196,8 @@ try {
             $r = Invoke-JrsRelocate -Jrs $jrs -Mode $op -Source $src -TargetFolder $dst -Overwrite:$Overwrite -CreateFolders:$CreateFolders
             Write-Host "$($op.ToUpper()) $src -> $($p.Target): HTTP $($r.Code)"
             if ("$($r.Code)" -notmatch '^2\d\d$') {
-                Write-JrsStep -Run $run -Step $step -State FAILED -Detail "HTTP $($r.Code) $($r.Body)"
+                $fs = Get-JrsRelocateFailState $r.Code
+                Write-JrsStep -Run $run -Step $step -State $fs -Detail "HTTP $($r.Code) $($r.Body)$(if ($fs -eq 'SKIPPED') { ' (server refused: nothing changed)' })"
                 throw "$op failed: HTTP $($r.Code) $($r.Body)"
             }
             Write-JrsStep -Run $run -Step $step -State SUCCEEDED -Detail "HTTP $($r.Code)"

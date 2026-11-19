@@ -177,3 +177,18 @@ Describe "Invoke-JrsRelocate request shape" {
             $Method -eq "PUT" -and $Path -eq "/rest_v2/resources/reports/b?createFolders=true&overwrite=true" }
     }
 }
+
+Describe "Get-JrsDashboardsReferencing -Strict" {
+    Context "listing fails" {
+        It "throws instead of reporting no dashboards" {
+            Mock Invoke-JrsRest { [pscustomobject]@{ Code = "500"; Body = "boom" } }
+            { Get-JrsDashboardsReferencing -Jrs $script:Dead -Uri "/reports/a/r" -Strict } | Should Throw "dashboard listing failed"
+        }
+    }
+    Context "no dashboards" {
+        It "returns none on 204" {
+            Mock Invoke-JrsRest { [pscustomobject]@{ Code = "204"; Body = "" } }
+            @(Get-JrsDashboardsReferencing -Jrs $script:Dead -Uri "/reports/a/r" -Strict).Count | Should Be 0
+        }
+    }
+}

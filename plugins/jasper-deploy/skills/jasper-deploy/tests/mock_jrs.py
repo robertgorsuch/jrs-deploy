@@ -216,6 +216,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, st.resources[uri])
                 if uri in st.resources and "expanded=true" in split.query:
                     return self._send(200, st.resources[uri])
+                if uri == "/" and split.query:
+                    # an unrecorded repository SEARCH (folderUri/type/q): answer "no results"
+                    # like the real server does, rather than a 404 that callers read as an error
+                    return self._send(204)
                 return self._send(404, {"message": "Resource %s not found." % uri, "errorCode": "resource.not.found"})
             src_hdr = self.headers.get("Content-Location")
             if src_hdr and method in ("POST", "PUT"):

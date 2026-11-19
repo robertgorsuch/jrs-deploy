@@ -27,8 +27,11 @@
                         Invoke-JrsRest, so PLAN MODE / PROD GUARD apply.
   New-JrsJobSnapshot  - read-only: every job + state to JSON (default
                         out/job-snapshots/<env|host-port>-<ts>.json) -> path.
-  Get-JrsJobRestorePlan - pure: snapshot vs current -> rows { Id; Label; Was;
-                        Now; Act (pause|resume|none|unresolved); MatchedBy }.
+  Get-JrsJobRestorePlan - pure: snapshot vs current -> rows { Id; Label;
+                        CurrentLabel; Was; Now; Act (pause|resume|none|unresolved);
+                        MatchedBy }. An id match needs the label + report to agree.
+  Get-JrsJobRestartPlan - pure: restart only jobs in an error state (the
+                        endpoint makes a one-shot copy of each failed job).
 #>
 
 if (-not (Get-Command Invoke-JrsRest -ErrorAction SilentlyContinue)) {
@@ -143,26 +146,43 @@ function New-JrsJobSnapshot {
 
 function Get-JrsJobRestorePlan {
     # Pure. Compare a snapshot with the current jobs ({ Id; Label; ReportUnitURI;
-    # Value }). Match by id first; when the id is gone (repository rebuilt by
-    # export/import) match by label + reportUnitURI, only when exactly one current
-    # job matches. Snapshot PAUSED / now NORMAL -> pause (the 7.5.1 -> 7.9.2+
-    # upgrade resumes paused jobs, KB); snapshot NORMAL / now PAUSED -> resume.
-    # Current jobs absent from the snapshot are left alone and not listed.
+    # Value }). An id match counts only when the label AND reportUnitURI agree
+    # too (after an export/import rebuild an id can belong to another job);
+    # otherwise match by label + reportUnitURI, only when exactly one current job
+    # matches. EXECUTING counts as running (NORMAL). Snapshot PAUSED / now running
+    # -> pause (the 7.5.1 -> 7.9.2+ upgrade resumes paused jobs, KB); snapshot
+    # running / now PAUSED -> resume. Current jobs absent from the snapshot are
+    # left alone and not listed.
     [CmdletBinding()]
     param([Parameter(Mandatory)]$Snapshot, [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Current)
+    function norm([string]$v) { if ($v -eq "EXECUTING") { "NORMAL" } else { $v } }
     foreach ($s in @($Snapshot.jobs | Where-Object { $_ })) {
         $by = "id"
-        $c = @($Current | Where-Object { [int]$_.Id -eq [int]$s.id })
+        $c = @($Current | Where-Object { [int]$_.Id -eq [int]$s.id -and $_.Label -eq $s.label -and $_.ReportUnitURI -eq $s.reportUnitURI })
         if ($c.Count -ne 1) {
             $by = "label+uri"
             $c = @($Current | Where-Object { $_.Label -eq $s.label -and $_.ReportUnitURI -eq $s.reportUnitURI })
         }
         if ($c.Count -ne 1) {
-            [pscustomobject]@{ Id = [int]$s.id; Label = $s.label; Was = "$($s.state)"; Now = $(if ($c.Count) { "AMBIGUOUS" } else { "MISSING" }); Act = "unresolved"; MatchedBy = "" }
+            [pscustomobject]@{ Id = [int]$s.id; Label = $s.label; CurrentLabel = $null; Was = "$($s.state)"; Now = $(if ($c.Count) { "AMBIGUOUS" } else { "MISSING" }); Act = "unresolved"; MatchedBy = "" }
             continue
         }
         $now = "$($c[0].Value)"; $was = "$($s.state)"
-        $act = if ($was -eq "PAUSED" -and $now -eq "NORMAL") { "pause" } elseif ($was -eq "NORMAL" -and $now -eq "PAUSED") { "resume" } else { "none" }
-        [pscustomobject]@{ Id = [int]$c[0].Id; Label = $s.label; Was = $was; Now = $now; Act = $act; MatchedBy = $by }
+        $act = if ((norm $was) -eq "PAUSED" -and (norm $now) -eq "NORMAL") { "pause" } elseif ((norm $was) -eq "NORMAL" -and (norm $now) -eq "PAUSED") { "resume" } else { "none" }
+        [pscustomobject]@{ Id = [int]$c[0].Id; Label = $s.label; CurrentLabel = $c[0].Label; Was = $was; Now = $now; Act = $act; MatchedBy = $by }
+    }
+}
+
+function Get-JrsJobRestartPlan {
+    # Pure. POST /jobs/restart is "Restarting Failed Jobs" (REST ref p.231-232):
+    # each listed job gets an immediate one-shot copy. Only jobs in an error
+    # state qualify; NORMAL / EXECUTING / PAUSED / MISSING are skipped.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$States)
+    foreach ($st in $States) {
+        $v = "$($st.Value)"
+        if ($v -in "NORMAL", "EXECUTING", "PAUSED") { [pscustomobject]@{ Id = $st.Id; From = $v; Act = "skip"; Reason = "not failed ($v); restart is for failed jobs" } }
+        elseif ($v -eq "MISSING") { [pscustomobject]@{ Id = $st.Id; From = $v; Act = "skip"; Reason = "job not found" } }
+        else { [pscustomobject]@{ Id = $st.Id; From = $v; Act = "restart"; Reason = "creates a one-shot copy that runs now" } }
     }
 }

@@ -313,6 +313,28 @@ Describe "recorded-server harness (mock_jrs.py + STAGE recording)" {
         Get-MockJobState 103 | Should Be "PAUSED"
     }
 
+    It "schedule_job.ps1 restore refuses a snapshot from another server (exit 2, no writes)" -Skip:(-not $script:haveTools) {
+        $other = Join-Path $script:tmp "jobs-snapshot-other.json"
+        $doc = Get-Content $script:snap -Raw | ConvertFrom-Json
+        $doc.server = "http://elsewhere.example:8080/jasperserver-pro"
+        [IO.File]::WriteAllText($other, ($doc | ConvertTo-Json -Depth 6))
+        Invoke-Skill "schedule_job.ps1" (@("-Action", "pause", "-Id", "101", "-Apply") + $tgt) | Out-Null
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "restore", "-Snapshot", $other, "-Apply") + $tgt)
+        $r.Exit | Should Be 2
+        $r.Out | Should Match 'AllowOtherServer'
+        (Get-Writes).Count | Should Be 0
+        Invoke-Skill "schedule_job.ps1" (@("-Action", "resume", "-Id", "101", "-Apply") + $tgt) | Out-Null
+    }
+
+    It "schedule_job.ps1 -Action restart -All is refused and sends nothing" -Skip:(-not $script:haveTools) {
+        Clear-Log
+        $r = Invoke-Skill "schedule_job.ps1" (@("-Action", "restart", "-All", "-Apply") + $tgt)
+        $r.Exit | Should Not Be 0
+        $r.Out | Should Match 'restart -All'
+        (Get-Writes).Count | Should Be 0
+    }
+
     if ($script:proc) { try { Stop-Process -Id $script:proc.Id -Force -ErrorAction SilentlyContinue } catch { } }
     [Environment]::SetEnvironmentVariable("JRS_RUNS_DIR", $null)
     Remove-Item $script:tmp -Recurse -Force -ErrorAction SilentlyContinue

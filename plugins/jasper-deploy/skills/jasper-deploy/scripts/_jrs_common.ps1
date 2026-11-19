@@ -326,17 +326,27 @@ function Get-JrsDashboardsReferencing {
         [Parameter(Mandatory)]$Jrs,
         [Parameter(Mandatory)][string]$Uri,
         [string]$Folder = "/",                    # limit the search to a subtree
-        [int]$Limit = 1000
+        [int]$Limit = 1000,
+        [switch]$Strict                           # throw when the answer is unknown (listing failed / truncated)
     )
     if (-not $Uri.StartsWith("/")) { $Uri = "/$Uri" }
     $path = "/rest_v2/resources?type=dashboard&recursive=true&limit=$Limit&folderUri=$Folder"
     $list = Invoke-JrsRest -Jrs $Jrs -Method GET -Path $path
-    if ("$($list.Code)" -ne "200" -or -not $list.Body) { return @() }
+    $lc = "$($list.Code)".Trim()
+    if ($lc -eq "204") { return @() }
+    if ($lc -ne "200" -or -not $list.Body) {
+        if ($Strict) { throw "dashboard listing failed: HTTP $lc" }
+        return @()
+    }
     $items = @()
     try {
         $parsed = $list.Body | ConvertFrom-Json
         if ($parsed -and ($parsed.PSObject.Properties.Name -contains "resourceLookup")) { $items = @($parsed.resourceLookup) }
-    } catch { return @() }
+    } catch {
+        if ($Strict) { throw "dashboard listing failed: unparseable body" }
+        return @()
+    }
+    if ($Strict -and $items.Count -ge $Limit) { throw "dashboard listing failed: $($items.Count) results reached the limit $Limit (may be truncated)" }
     $hits = @()
     foreach ($it in $items) {
         if (-not $it.uri) { continue }

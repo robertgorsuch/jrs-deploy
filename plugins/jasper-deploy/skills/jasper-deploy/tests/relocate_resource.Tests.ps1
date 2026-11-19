@@ -9,7 +9,8 @@ $ErrorActionPreference = 'Continue'
 $script:Dead = [pscustomobject]@{ ServerUrl = "http://127.0.0.1:9/jasperserver-pro"; User = "u"; Password = "p"; Env = $null; IsProd = $false }
 
 Describe "Get-JrsRelocatePlan prechecks" {
-    Mock Test-JrsIsFolder { $false }
+    Mock Test-JrsIsFolder { "no" }
+    Mock Get-JrsJobList { @() }
 
     It "refuses a move onto an existing target without -Overwrite" {
         Mock Test-JrsResource { $true }                      # source, target and folder all exist
@@ -47,7 +48,7 @@ Describe "Get-JrsRelocatePlan prechecks" {
     Context "folder source" {   # own Context: under Pester 3.4 a Mock inside an It persists for the rest of its block
         It "refuses a folder source (v1 relocates single resources only)" {
             Mock Test-JrsResource { param($Jrs, $Uri) $Uri -ne "/reports/b/f" }
-            Mock Test-JrsIsFolder { $true }
+            Mock Test-JrsIsFolder { "yes" }
             $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/reports/a/f" -TargetFolder "/reports/b"
             $p.Ok | Should Be $false
             ($p.Problems -join ";") | Should Match "is a folder"
@@ -71,6 +72,51 @@ Describe "Get-JrsRelocatePlan prechecks" {
         $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/reports/a/r" -TargetFolder "/reports/b" -Overwrite
         $p.Ok | Should Be $true
         $p.TargetExists | Should Be $true
+    }
+}
+
+Describe "final-review fixes: relocate fails closed" {
+    Mock Test-JrsIsFolder { "no" }
+    Mock Get-JrsJobList { @() }
+    Mock Get-JrsDashboardsReferencing { @() }
+    It "refuses the repository root as source" {
+        Mock Test-JrsResource { $true }
+        $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/" -TargetFolder "/reports/b"
+        $p.Ok | Should Be $false
+        ($p.Problems -join ";") | Should Match "root"
+    }
+    Context "jobs" {
+        It "refuses a move when scheduled jobs run the report" {
+            Mock Test-JrsResource { param($Jrs, $Uri) $Uri -ne "/reports/b/r" }
+            Mock Get-JrsJobList { @([pscustomobject]@{ Id = 7 }) }
+            $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/reports/a/r" -TargetFolder "/reports/b" -Move
+            $p.Ok | Should Be $false
+            ($p.Problems -join ";") | Should Match "scheduled job"
+        }
+    }
+    Context "folder check unknown" {
+        It "fails closed when the folder check cannot answer" {
+            Mock Test-JrsResource { param($Jrs, $Uri) $Uri -ne "/reports/b/r" }
+            Mock Test-JrsIsFolder { "unknown" }
+            $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/reports/a/r" -TargetFolder "/reports/b"
+            $p.Ok | Should Be $false
+            ($p.Problems -join ";") | Should Match "could not verify"
+        }
+    }
+    Context "dashboard check unknown" {
+        It "fails closed when the dashboard check cannot answer" {
+            Mock Test-JrsResource { param($Jrs, $Uri) $Uri -ne "/reports/b/r" }
+            Mock Get-JrsDashboardsReferencing { throw "dashboard listing failed: HTTP 500" }
+            $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/reports/a/r" -TargetFolder "/reports/b" -Move
+            $p.Ok | Should Be $false
+            ($p.Problems -join ";") | Should Match "could not verify"
+        }
+    }
+    It "a 4xx refusal is SKIPPED (nothing changed, no compensation replayed); anything else stays FAILED" {
+        Get-JrsRelocateFailState "404" | Should Be "SKIPPED"
+        Get-JrsRelocateFailState "409" | Should Be "SKIPPED"
+        Get-JrsRelocateFailState "500" | Should Be "FAILED"
+        Get-JrsRelocateFailState "000" | Should Be "FAILED"
     }
 }
 
