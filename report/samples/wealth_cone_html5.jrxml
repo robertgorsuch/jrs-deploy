@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Wealth cone (fan chart) prototype - HTML5 (HighCharts) Line chart whose two
+  range series are switched to Highcharts "arearange" via series contributors:
+    SeriesProperty     -> series-level options (type, color, fillOpacity, zIndex)
+    SeriesItemProperty -> per-point low/high taken from hidden helper measures
+  Synthetic data (report/samples/wealth_cone.sql): lognormal cone, W0=1.22M,
+  mu=5%/yr, sigma=8%/yr, 66% = +/-1.00 sigma*sqrt(t), 95% = +/-1.96 sigma*sqrt(t).
+  PRO component: legacy 6.x jrxml, NOT locally compilable - validate by deploy + run.
+-->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="wealth_cone_html5" pageWidth="842" pageHeight="595" orientation="Landscape" columnWidth="802"
+              leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20"
+              uuid="c0de0001-0000-4000-8000-000000000001">
+	<queryString><![CDATA[SELECT to_char(DATE '2026-01-05' + (k * 7), 'YYYY-MM-DD') AS week_dt, round((w0 * exp(mu * t))::numeric, 2)::float8 AS median, CASE WHEN k <= 10 THEN round((w0 * exp(mu * t + 0.012 * sin(k * 1.3) - 0.003 * k))::numeric, 2)::float8 END AS actual, round((w0 * exp(mu * t - 1.00 * sigma * sqrt(t)))::numeric, 2)::float8 AS p66_lo, round((w0 * exp(mu * t + 1.00 * sigma * sqrt(t)))::numeric, 2)::float8 AS p66_hi, round((w0 * exp(mu * t - 1.96 * sigma * sqrt(t)))::numeric, 2)::float8 AS p95_lo, round((w0 * exp(mu * t + 1.96 * sigma * sqrt(t)))::numeric, 2)::float8 AS p95_hi FROM (SELECT k, k / 52.0 AS t, 1220000.0 AS w0, 0.05 AS mu, 0.08 AS sigma FROM generate_series(0, 52) AS g(k)) p ORDER BY k]]></queryString>
+	<field name="week_dt" class="java.lang.String"/>
+	<field name="median" class="java.lang.Double"/>
+	<field name="actual" class="java.lang.Double"/>
+	<field name="p66_lo" class="java.lang.Double"/>
+	<field name="p66_hi" class="java.lang.Double"/>
+	<field name="p95_lo" class="java.lang.Double"/>
+	<field name="p95_hi" class="java.lang.Double"/>
+	<title>
+		<band height="535">
+			<image scaleImage="RetainShape" hAlign="Left" vAlign="Top">
+				<reportElement x="0" y="0" width="44" height="44" uuid="c0de0001-0000-4000-8000-000000000002"/>
+				<imageExpression><![CDATA["repo:/images/actian_logo"]]></imageExpression>
+			</image>
+			<staticText>
+				<reportElement x="0" y="4" width="802" height="24" uuid="c0de0001-0000-4000-8000-000000000003"/>
+				<textElement textAlignment="Center"><font size="16" isBold="true"/></textElement>
+				<text><![CDATA[Cono dei patrimoni (prototype)]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="0" y="28" width="802" height="14" forecolor="#666666" uuid="c0de0001-0000-4000-8000-000000000004"/>
+				<textElement textAlignment="Center"><font size="9"/></textElement>
+				<text><![CDATA[Synthetic data - 12-month weekly projection, median with 66% and 95% ranges, actual to date]]></text>
+			</staticText>
+			<componentElement>
+				<reportElement x="0" y="50" width="802" height="480" uuid="c0de0001-0000-4000-8000-000000000005"/>
+				<hc:chart xmlns:hc="http://jaspersoft.com/highcharts"
+				          xsi:schemaLocation="http://jaspersoft.com/highcharts http://jaspersoft.com/schema/highcharts.xsd"
+				          type="Line" evaluationTime="Report">
+					<hc:chartSetting name="default">
+						<hc:chartProperty name="title.text">
+							<hc:propertyExpression><![CDATA[""]]></hc:propertyExpression>
+						</hc:chartProperty>
+						<hc:chartProperty name="credits.enabled">
+							<hc:propertyExpression><![CDATA[Boolean.FALSE]]></hc:propertyExpression>
+						</hc:chartProperty>
+						<hc:chartProperty name="tooltip.shared">
+							<hc:propertyExpression><![CDATA[Boolean.TRUE]]></hc:propertyExpression>
+						</hc:chartProperty>
+						<hc:chartProperty name="tooltip.valueDecimals">
+							<hc:propertyExpression><![CDATA[Integer.valueOf(2)]]></hc:propertyExpression>
+						</hc:chartProperty>
+						<hc:chartProperty name="yAxis.title" value="Capitale"/>
+						<hc:chartProperty name="xAxis.tickInterval">
+							<hc:propertyExpression><![CDATA[Integer.valueOf(8)]]></hc:propertyExpression>
+						</hc:chartProperty>
+					</hc:chartSetting>
+					<multiAxisData>
+						<multiAxisDataset>
+							<dataset/>
+						</multiAxisDataset>
+						<dataAxis axis="Rows">
+							<axisLevel name="Week">
+								<labelExpression><![CDATA["Week"]]></labelExpression>
+								<axisLevelBucket class="java.lang.String">
+									<bucketExpression><![CDATA[$F{week_dt}]]></bucketExpression>
+								</axisLevelBucket>
+							</axisLevel>
+						</dataAxis>
+						<multiAxisMeasure name="Range95" class="java.lang.Number" calculation="Highest">
+							<labelExpression><![CDATA["Range 95%"]]></labelExpression>
+							<valueExpression><![CDATA[$F{p95_hi}]]></valueExpression>
+						</multiAxisMeasure>
+						<multiAxisMeasure name="Range66" class="java.lang.Number" calculation="Highest">
+							<labelExpression><![CDATA["Range 66%"]]></labelExpression>
+							<valueExpression><![CDATA[$F{p66_hi}]]></valueExpression>
+						</multiAxisMeasure>
+						<multiAxisMeasure name="Median" class="java.lang.Number" calculation="Highest">
+							<labelExpression><![CDATA["Cap. Medio"]]></labelExpression>
+							<valueExpression><![CDATA[$F{median}]]></valueExpression>
+						</multiAxisMeasure>
+						<multiAxisMeasure name="Actual" class="java.lang.Number" calculation="Highest">
+							<labelExpression><![CDATA["Cap. Effettivo"]]></labelExpression>
+							<valueExpression><![CDATA[$F{actual}]]></valueExpression>
+						</multiAxisMeasure>
+						<multiAxisMeasure name="Lo95" class="java.lang.Number" calculation="Lowest">
+							<labelExpression><![CDATA["lo95"]]></labelExpression>
+							<valueExpression><![CDATA[$F{p95_lo}]]></valueExpression>
+						</multiAxisMeasure>
+						<multiAxisMeasure name="Lo66" class="java.lang.Number" calculation="Lowest">
+							<labelExpression><![CDATA["lo66"]]></labelExpression>
+							<valueExpression><![CDATA[$F{p66_lo}]]></valueExpression>
+						</multiAxisMeasure>
+					</multiAxisData>
+					<hc:series name="Range95">
+						<hc:contributor name="SeriesProperty">
+							<hc:contributorProperty name="type" valueType="Constant" value="arearange"/>
+							<hc:contributorProperty name="color" valueType="Constant" value="#F2C9A0"/>
+							<hc:contributorProperty name="fillOpacity" valueType="Constant" value="0.8"/>
+							<hc:contributorProperty name="lineWidth" valueType="Constant" value="0"/>
+							<hc:contributorProperty name="zIndex" valueType="Constant" value="0"/>
+							<hc:contributorProperty name="marker.enabled" valueType="Constant" value="false"/>
+						</hc:contributor>
+						<hc:contributor name="SeriesItemProperty">
+							<hc:contributorProperty name="low" valueType="Measure" value="Lo95"/>
+							<hc:contributorProperty name="high" valueType="Measure" value="Range95"/>
+						</hc:contributor>
+					</hc:series>
+					<hc:series name="Range66">
+						<hc:contributor name="SeriesProperty">
+							<hc:contributorProperty name="type" valueType="Constant" value="arearange"/>
+							<hc:contributorProperty name="color" valueType="Constant" value="#6B5B3E"/>
+							<hc:contributorProperty name="fillOpacity" valueType="Constant" value="0.6"/>
+							<hc:contributorProperty name="lineWidth" valueType="Constant" value="0"/>
+							<hc:contributorProperty name="zIndex" valueType="Constant" value="1"/>
+							<hc:contributorProperty name="marker.enabled" valueType="Constant" value="false"/>
+						</hc:contributor>
+						<hc:contributor name="SeriesItemProperty">
+							<hc:contributorProperty name="low" valueType="Measure" value="Lo66"/>
+							<hc:contributorProperty name="high" valueType="Measure" value="Range66"/>
+						</hc:contributor>
+					</hc:series>
+					<hc:series name="Median">
+						<hc:contributor name="SeriesProperty">
+							<hc:contributorProperty name="color" valueType="Constant" value="#D9363E"/>
+							<hc:contributorProperty name="dashStyle" valueType="Constant" value="ShortDash"/>
+							<hc:contributorProperty name="zIndex" valueType="Constant" value="3"/>
+						</hc:contributor>
+					</hc:series>
+					<hc:series name="Actual">
+						<hc:contributor name="SeriesProperty">
+							<hc:contributorProperty name="color" valueType="Constant" value="#4CAF50"/>
+							<hc:contributorProperty name="zIndex" valueType="Constant" value="4"/>
+						</hc:contributor>
+					</hc:series>
+					<hc:series name="Lo95" visible="false"/>
+					<hc:series name="Lo66" visible="false"/>
+				</hc:chart>
+			</componentElement>
+		</band>
+	</title>
+</jasperReport>
