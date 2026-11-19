@@ -360,6 +360,7 @@ at fill time; **skip local compile**, deploy and run.
 |---|---|---|
 | HTML5 charts (HighCharts) | `<hc:chart xmlns:hc="http://jaspersoft.com/highcharts" type="Column\|StackedBar\|…">` with `<hc:chartSetting>` + `<multiAxisData>` (`dataAxis` row buckets + `multiAxisMeasure`) | `metro_population_html5.jrxml` |
 | FusionMaps choropleth | `<fm:map xmlns:fm="http://jaspersoft.com/fusion">` with `<fm:mapNameExpression>`, `<fm:colorRange>`s, `<fm:mapDataset><fm:entity>` (idExpression + valueExpression) | `tx_county_density_map.jrxml` |
+| FusionMaps bubble markers (choropleth + data-sized circles) | same `fm:map` plus `<fm:shapeData>` (`c:item`: id/type=circle/radius/fillColor) and `<c:markerData>` (`c:item`: id/x/y/shapeId/label/toolText); see `fusion-pro-gotchas.md` | `..\..\report\italy\italy_region_bubble_map.jrxml` |
 
 **Gotcha:** a chart/map component bound to the main dataset and placed in a band
 that fills *before* row iteration (e.g. `title`) must set
