@@ -130,6 +130,20 @@ function Invoke-JrsJobBatch {
     Assert-JrsOk -Response $r -Operation "jobs $Action failed" | Out-Null
     $echo = @()
     if ($r.Body) { try { $echo = @(($r.Body | ConvertFrom-Json).jobId) } catch { $echo = @() } }
+    # Never trust the echo alone: on STAGE (JRS 10.0, 2026-11-19) /jobs/resume
+    # answered 200 {"jobId":[id]} while the job stayed PAUSED. Re-read every
+    # job's state; pause must end PAUSED, resume must end not-PAUSED (and the
+    # job must still exist). restart is not checked: it creates one-shot copies
+    # and leaves the original jobs' states alone.
+    if ($Action -in "pause", "resume") {
+        $bad = @()
+        foreach ($id in $Ids) {
+            $v = "$((Get-JrsJobState -Jrs $Jrs -Id $id).Value)"
+            $ok = if ($Action -eq "pause") { $v -eq "PAUSED" } else { $v -notin "PAUSED", "MISSING", "" }
+            if (-not $ok) { $bad += "$id ($v)" }
+        }
+        if ($bad.Count) { throw "jobs $Action did not take effect for $($bad.Count) of $($Ids.Count) job(s): $($bad -join ', ') -- the server answered HTTP $($r.Code) and echoed the ids, but the state did not change" }
+    }
     return [int[]]@($echo | Where-Object { $_ -ne $null })
 }
 

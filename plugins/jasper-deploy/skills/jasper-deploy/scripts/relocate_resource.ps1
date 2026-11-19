@@ -136,7 +136,7 @@ function Get-JrsRelocatePlan {
             } catch { $problems += "could not verify which dashboards reference ${src}: $_" }
             try {
                 $jobs = @(Get-JrsJobList -Jrs $Jrs -ReportUri $src)
-                if ($jobs.Count) { $problems += "$($jobs.Count) scheduled job(s) run $src and would fail after a move (ids $(($jobs | ForEach-Object { $_.Id }) -join ',')); move or delete those jobs first" }
+                if ($jobs.Count) { $problems += "$($jobs.Count) scheduled job(s) run $src (ids $(($jobs | ForEach-Object { $_.Id }) -join ',')); a move keeps them pointed at the report but leaves their output folder behind, so move or delete those jobs first" }
             } catch { $problems += "could not verify which scheduled jobs run ${src}: $_" }
         }
     }

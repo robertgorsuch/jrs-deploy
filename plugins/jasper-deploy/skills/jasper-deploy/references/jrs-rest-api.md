@@ -57,21 +57,29 @@ The backbone the skill scripts already use.
   `application/repository.<type>+json` content type and fields. Use these for a
   non-PostgreSQL/JDBC backend; the JDBC path is the one verified here.
 
-### resources: copy / move  **[doc-only, ref 10.0.0 p.78-79; STAGE check pending]**
+### resources: copy / move  **[verified on STAGE 10.0, 2026-11-19; ref 10.0.0 p.78-79]**
 Wrapped by `scripts/relocate_resource.ps1` (plan by default, `-Apply`, journaled;
 helper `Invoke-JrsRelocate` in `_jrs_common.ps1`).
 - **Copy:** `POST /resources/<destination folder>?createFolders=..&overwrite=..`
-  with header `Content-Location: <source uri>`; any body is ignored. `201` + the
-  new descriptor; `404` when the source is not valid.
+  with header `Content-Location: <source uri>`; any body is ignored, **but a
+  `Content-Type` header is required** -- without one the server answers `500
+  "mediaType is null"` (G69; the script sends `application/json`). Success is
+  `200` + the new descriptor (the reference says `201`); `404
+  resource.not.found` when the source is not valid.
 - **Move:** the same with `PUT`; the source is removed.
 - The URL is the destination FOLDER and the resource keeps its name
   (`<folder>/<leaf>`). `createFolders` defaults to `true` server-side; the script
   sends `false` unless `-CreateFolders`. `overwrite=true` replaces an existing
   target even of a different type.
-- Not yet confirmed on STAGE (plan Task 7): the status for an existing target
-  without `overwrite`, and whether a moved datasource stays referenced by its
-  reports. A moved report DOES break dashboards that use it (they store URIs, G67),
-  so the script refuses that move.
+- An existing target without `overwrite` (copy or move): `400
+  resource.already.exists`, nothing changes. A missing destination folder with
+  `createFolders=false`: `404 folder.not.found`. `DELETE` of a resource that does
+  not exist answers `204`, not `404`.
+- **References follow a move.** A report unit's `dataSourceReference` is
+  rewritten to the datasource's new URI and the report still runs; a scheduled
+  job's `source.reportUnitURI` follows a moved report (its output folder does
+  not). Dashboards were not re-checked on STAGE; the script still refuses a
+  move that a dashboard (G67) or a scheduled job depends on.
 
 ## reports — synchronous run  **[verified]**
 - `GET /reports{uri}.{fmt}` — fill + export in one blocking call.
@@ -263,7 +271,10 @@ recurring, output formats, repo destination, optional mail).
   `{"jobId":[1236,1240]}`; `200` echoes the ids acted on; unknown ids are
   ignored without error. **An EMPTY body or list on pause/resume acts on EVERY
   job in the scheduler (G66).** Resume does not run triggers missed while the
-  job was paused. Wrapped by `schedule_job.ps1 -Action pause|resume|restart|state|
+  job was paused. **On STAGE 10.0 (2026-11-19) `/jobs/resume` answered `200`
+  with the ids echoed while the jobs stayed `PAUSED` (G68)**, so
+  `Invoke-JrsJobBatch` re-reads every job's state after pause/resume and throws
+  when the change did not take effect. Wrapped by `schedule_job.ps1 -Action pause|resume|restart|state|
   snapshot|restore` (helpers in `_jobs_common.ps1`); the empty-list case is
   refused client-side.
 - Job ownership cannot be changed through the UI or REST; the KB's only route is
@@ -674,9 +685,25 @@ Moving a resource breaks the dashboards that use it. Dashboards store their tile
 report URIs in their own descriptor/companion files, so after a move the
 dashboard points at a URI that no longer exists. `relocate_resource.ps1 -Move`
 checks `Get-JrsDashboardsReferencing` and refuses (exit 2); copy the report
-instead, or recompose the dashboard against the new URI. Whether report units
-keep their datasource reference across a datasource move is not yet verified on
-STAGE.
+instead, or recompose the dashboard against the new URI. (Not re-verified on
+STAGE: there, a report's datasource reference and a job's report URI DID follow
+a move, 2026-11-19.)
+
+### G68
+`POST /rest_v2/jobs/resume` can report success without resuming anything. On
+STAGE (JRS 10.0, 2026-11-19) it answered `200 {"jobId":[...]}` for paused jobs,
+repeatedly and with no server log entry, while `/jobs/{id}/state` and the Quartz
+`qrtz_triggers.trigger_state` stayed `PAUSED`; pause worked. The echo is
+therefore not proof: `Invoke-JrsJobBatch` re-reads each job's state after a
+pause/resume and throws ("did not take effect"), so `schedule_job.ps1` exits 4
+and a rollback that needs a resume reports ROLLBACK_INCOMPLETE. Resume such jobs
+in the UI (or ask support) and confirm with `schedule_job.ps1 -Action state`.
+
+### G69
+A copy/move without a `Content-Type` fails with `500 "Cannot invoke
+MediaType.getSubtype() because mediaType is null"` (STAGE 10.0, 2026-11-19), even
+though the request has no body and the reference says any body is ignored.
+`Invoke-JrsRelocate` sends `Content-Type: application/json`.
 
 ## Gotchas: export/import, permissions/admin, alerts/options/run, environment
 

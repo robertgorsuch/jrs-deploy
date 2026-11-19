@@ -511,7 +511,9 @@ function Invoke-JrsRelocate {
     $method = if ($Mode -eq "copy") { "POST" } else { "PUT" }
     $path = "/rest_v2/resources$dst" + "?createFolders=" + $(if ($CreateFolders) { "true" } else { "false" })
     if ($Overwrite) { $path += "&overwrite=true" }
-    return Invoke-JrsRest -Jrs $Jrs -Method $method -Path $path -Headers @("Content-Location: $src")
+    # The body is ignored (REST ref p.78), but JRS 10.0 500s ("mediaType is null")
+    # when the request has no Content-Type at all -- verified on STAGE 2026-11-19.
+    return Invoke-JrsRest -Jrs $Jrs -Method $method -Path $path -ContentType "application/json" -Headers @("Content-Location: $src")
 }
 
 function Invoke-JrsConnectionTest {

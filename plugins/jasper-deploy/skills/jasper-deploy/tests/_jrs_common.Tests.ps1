@@ -170,6 +170,12 @@ Describe "Invoke-JrsRelocate request shape" {
         Assert-MockCalled Invoke-JrsRest -Times 1 -ParameterFilter {
             $Method -eq "POST" -and $Path -eq "/rest_v2/resources/reports/b?createFolders=false" -and ($Headers -contains "Content-Location: /reports/a/r") }
     }
+    It "sends a Content-Type on copy and move (STAGE 10.0: without one the server 500s 'mediaType is null')" {
+        Mock Invoke-JrsRest { [pscustomobject]@{ Code = "200"; Body = "{}" } }
+        Invoke-JrsRelocate -Jrs $script:Dead -Mode copy -Source "/reports/a/r" -TargetFolder "/reports/b" | Out-Null
+        Invoke-JrsRelocate -Jrs $script:Dead -Mode move -Source "/reports/a/r" -TargetFolder "/reports/b" | Out-Null
+        Assert-MockCalled Invoke-JrsRest -Times 2 -Exactly -Scope It -ParameterFilter { $ContentType -eq "application/json" }
+    }
     It "move PUTs and adds overwrite=true only when asked" {
         Mock Invoke-JrsRest { [pscustomobject]@{ Code = "201"; Body = "{}" } }
         Invoke-JrsRelocate -Jrs $script:Dead -Mode move -Source "/reports/a/r" -TargetFolder "/reports/b" -Overwrite -CreateFolders | Out-Null

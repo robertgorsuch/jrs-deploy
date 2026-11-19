@@ -4,8 +4,22 @@
 
 Plan `specs/2026-11-18-jasper-deploy-jobs-and-relocate-plan.md`, from a review of
 the Jaspersoft community knowledgebase (Wayback captures 2023-11 .. 2025-10).
-Validated offline only (Pester + `tests/mock_jrs.py`); the STAGE acceptance run
-(plan Task 7) is still to do. PROD was not contacted.
+Validated offline (Pester + `tests/mock_jrs.py`) and by the STAGE acceptance run
+(plan Task 7, 2026-11-19, throwaway folder and jobs, cleaned up). PROD was not
+contacted.
+
+### Fixed by the STAGE run
+- Copy/move sent no `Content-Type` and STAGE answered `500 "mediaType is null"`
+  (G69); `Invoke-JrsRelocate` now sends `application/json`, and the mock rejects
+  a copy/move without one.
+- STAGE's `/jobs/resume` answered `200` with the ids echoed but left the jobs
+  PAUSED (G68). `Invoke-JrsJobBatch` now re-reads each job's state after
+  pause/resume and throws when it did not change, so `schedule_job.ps1` exits 4
+  and a rollback that needs a resume reports ROLLBACK_INCOMPLETE instead of
+  claiming success.
+- Facts recorded in `jrs-rest-api.md`: copy/move succeed with `200` (not `201`);
+  an existing target answers `400 resource.already.exists`; a moved
+  datasource's reports and a moved report's jobs follow the new URI.
 
 ### Scheduler control (`schedule_job.ps1`)
 - New actions `pause`, `resume` (`-Id 101,103` or `-All`) and `restart`

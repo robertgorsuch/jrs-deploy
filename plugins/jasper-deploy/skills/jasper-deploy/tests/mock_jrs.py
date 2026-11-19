@@ -223,6 +223,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(404, {"message": "Resource %s not found." % uri, "errorCode": "resource.not.found"})
             src_hdr = self.headers.get("Content-Location")
             if src_hdr and method in ("POST", "PUT"):
+                if not self.headers.get("Content-Type"):
+                    # JRS 10.0 (STAGE, 2026-11-19): a copy/move without a Content-Type 500s
+                    return self._send(500, {"message": "Cannot invoke \"jakarta.ws.rs.core.MediaType.getSubtype()\" because \"mediaType\" is null", "errorCode": "generic.error.message"})
                 # copy (POST) / move (PUT): the URL is the destination folder, the leaf is kept
                 src = "/" + "/".join(p for p in unquote(src_hdr).split("/") if p)
                 known = src in st.resources and src not in st.deleted

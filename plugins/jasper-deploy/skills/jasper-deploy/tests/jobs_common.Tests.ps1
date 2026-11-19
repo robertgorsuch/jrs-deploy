@@ -23,10 +23,33 @@ Describe "Invoke-JrsJobBatch" {
         }
     }
     Context "one id" {
-        It "POSTs to /rest_v2/jobs/pause" {
+        It "POSTs to /rest_v2/jobs/pause and confirms the new state" {
             Mock Invoke-JrsRest { [pscustomobject]@{ Code = "200"; Body = '{"jobId":[5]}' } }
+            Mock Get-JrsJobState { [pscustomobject]@{ Id = $Id; Value = "PAUSED" } }
             (Invoke-JrsJobBatch -Jrs $script:Dead -Action pause -Ids @(5)) | Should Be 5
             Assert-MockCalled Invoke-JrsRest -Times 1 -ParameterFilter { $Method -eq "POST" -and $Path -eq "/rest_v2/jobs/pause" }
+            Assert-MockCalled Get-JrsJobState -Times 1 -ParameterFilter { $Id -eq 5 }
+        }
+    }
+    Context "server echoes the ids but the state does not change (STAGE 10.0 resume, 2026-11-19)" {
+        It "throws instead of reporting success" {
+            Mock Invoke-JrsRest { [pscustomobject]@{ Code = "200"; Body = '{"jobId":[5,6]}' } }
+            Mock Get-JrsJobState { [pscustomobject]@{ Id = $Id; Value = $(if ($Id -eq 5) { "NORMAL" } else { "PAUSED" }) } }
+            { Invoke-JrsJobBatch -Jrs $script:Dead -Action resume -Ids @(5, 6) } | Should Throw "did not take effect"
+        }
+        It "names the jobs that did not change" {
+            Mock Invoke-JrsRest { [pscustomobject]@{ Code = "200"; Body = '{"jobId":[5,6]}' } }
+            Mock Get-JrsJobState { [pscustomobject]@{ Id = $Id; Value = $(if ($Id -eq 5) { "NORMAL" } else { "PAUSED" }) } }
+            $msg = try { Invoke-JrsJobBatch -Jrs $script:Dead -Action resume -Ids @(5, 6); "" } catch { "$_" }
+            $msg | Should Match "6 \(PAUSED\)"
+            $msg | Should Not Match "5 \("
+        }
+    }
+    Context "restart" {
+        It "is not state-checked (it creates one-shot copies; the originals keep their state)" {
+            Mock Invoke-JrsRest { [pscustomobject]@{ Code = "200"; Body = '{"jobId":[5]}' } }
+            Mock Get-JrsJobState { throw "must not be called" }
+            (Invoke-JrsJobBatch -Jrs $script:Dead -Action restart -Ids @(5)) | Should Be 5
         }
     }
     Context "server error" {
