@@ -59,7 +59,18 @@ function Get-JrsJobState {
     if ($code -eq "404") { return [pscustomobject]@{ Id = $Id; Value = "MISSING"; NextFireTime = $null; PreviousFireTime = $null } }
     Assert-JrsOk -Response $r -Operation "job $Id state failed" | Out-Null
     $s = $r.Body | ConvertFrom-Json
-    return [pscustomobject]@{ Id = $Id; Value = "$($s.value)"; NextFireTime = $s.nextFireTime; PreviousFireTime = $s.previousFireTime }
+    # Fire times are taken from the raw body: pwsh's ConvertFrom-Json turns
+    # ISO-8601 strings into DateTime (dropping the server's offset), while
+    # Windows PowerShell 5.1 keeps them as text. The raw text is identical on both.
+    return [pscustomobject]@{ Id = $Id; Value = "$($s.value)"; NextFireTime = (Get-JrsJsonRawString $r.Body "nextFireTime"); PreviousFireTime = (Get-JrsJsonRawString $r.Body "previousFireTime") }
+}
+
+function Get-JrsJsonRawString([string]$Json, [string]$Name) {
+    # The string value of the first "<Name>": "..." in $Json exactly as sent, or
+    # $null when absent / not a string. For flat bodies only (no nested match).
+    $m = [regex]::Match("$Json", '"' + [regex]::Escape($Name) + '"\s*:\s*"((?:[^"\\]|\\.)*)"')
+    if ($m.Success) { return $m.Groups[1].Value }
+    return $null
 }
 
 function Resolve-JrsJobTargets {

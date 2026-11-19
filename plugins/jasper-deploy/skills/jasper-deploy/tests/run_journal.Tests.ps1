@@ -103,6 +103,25 @@ Describe "run journal" {
         @(Get-JrsRuns).Count | Should Be 2
     }
 
+    Context "two runs in the same second" {
+        # Run ids have 1-second resolution plus a random suffix, so the name alone
+        # does not order runs started in the same second (seen on fast CI runners:
+        # rollback of 'latest' undid the wrong run). The ms startedAt decides.
+        $script:fakeIds = [System.Collections.Queue]::new(@("r-20261118-120000-ffff", "r-20261118-120000-0000"))
+        Mock New-JrsRunId { $script:fakeIds.Dequeue() }
+        It "'latest' and Get-JrsRuns order by startedAt, not by the random suffix" {
+            Get-ChildItem $script:Runs -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+            $first = New-JrsRun -Operation "first" -Target $script:Target -Mode apply
+            Complete-JrsRun -Run $first -Status SUCCEEDED
+            Start-Sleep -Milliseconds 50
+            $second = New-JrsRun -Operation "second" -Target $script:Target -Mode apply
+            Complete-JrsRun -Run $second -Status SUCCEEDED
+            $second.RunId | Should Be "r-20261118-120000-0000"
+            (Get-JrsRun -RunId latest).Operation | Should Be "second"
+            @(Get-JrsRuns)[0].Operation | Should Be "second"
+        }
+    }
+
     It "Get-JrsRollbackPlan returns compensations newest-first for steps that ran, skipping compensated and irreversible ones" {
         $run = New-JrsRun -Operation "promote" -Target $script:Target -Mode apply
         Write-JrsStep -Run $run -Step "1" -State SUCCEEDED -Compensation @{ type = "reimport"; zip = "a.zip" }

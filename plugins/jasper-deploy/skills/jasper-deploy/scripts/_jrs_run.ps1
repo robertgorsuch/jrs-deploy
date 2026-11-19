@@ -152,12 +152,31 @@ function Complete-JrsRun {
     $Global:JrsCurrentRun = $null
 }
 
+function Get-JrsRunDirsNewestFirst([string]$Root) {
+    # Newest first by run.json startedAt (ms ISO-8601, sorts as text), then by
+    # name. The run id alone has 1-second resolution plus a random suffix, so
+    # two runs started in the same second would otherwise order at random and
+    # 'latest' could name the wrong run. startedAt is read as raw text: pwsh's
+    # ConvertFrom-Json would turn it into a DateTime.
+    $dirs = @(Get-ChildItem $Root -Directory | Where-Object { $_.Name -like "r-*" })
+    $keyed = foreach ($d in $dirs) {
+        $started = ""
+        $f = Join-Path $d.FullName "run.json"
+        if (Test-Path $f) {
+            $m = [regex]::Match((Get-Content $f -Raw), '"startedAt"\s*:\s*"([^"]+)"')
+            if ($m.Success) { $started = $m.Groups[1].Value }
+        }
+        [pscustomobject]@{ Dir = $d; Started = $started; Name = $d.Name }
+    }
+    return @($keyed | Sort-Object -Property @{ Expression = "Started"; Descending = $true }, @{ Expression = "Name"; Descending = $true } | ForEach-Object { $_.Dir })
+}
+
 function Get-JrsRun {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$RunId)             # full id, unique prefix, or 'latest'
     $root = Get-JrsRunsRoot
     if (-not (Test-Path $root)) { throw "no runs recorded under $root" }
-    $dirs = @(Get-ChildItem $root -Directory | Where-Object { $_.Name -like "r-*" } | Sort-Object Name -Descending)
+    $dirs = @(Get-JrsRunDirsNewestFirst $root)
     $dir = $null
     if ($RunId -eq "latest") { $dir = $dirs | Select-Object -First 1 }
     else {
@@ -182,7 +201,7 @@ function Get-JrsRuns {
     $root = Get-JrsRunsRoot
     if (-not (Test-Path $root)) { return @() }
     $out = @()
-    foreach ($d in @(Get-ChildItem $root -Directory | Where-Object { $_.Name -like "r-*" } | Sort-Object Name -Descending)) {
+    foreach ($d in @(Get-JrsRunDirsNewestFirst $root)) {
         try { $out += (Get-JrsRun -RunId $d.Name) } catch { }
     }
     return @($out)
