@@ -16,6 +16,9 @@
     * -Move -Overwrite is refused (its rollback would need a move plus a reimport)
     * -Move of a resource a dashboard references is refused (dashboards store
       URIs, so the dashboard would break)
+    * -Move of a report that scheduled jobs run only WARNS: on JRS 10.0 (STAGE,
+      2026-11-19) a job's reportUnitURI follows the move; its output folder
+      does not, so the warning names the jobs to review
     * the target folder exists, unless -CreateFolders
 
   SAFETY MODEL (1.3.0):
@@ -103,7 +106,8 @@ function Get-JrsRelocateFailState([string]$Code) {
 }
 
 function Get-JrsRelocatePlan {
-    # Reads only. Returns { Ok; Target; TargetExists; Problems; Lines }.
+    # Reads only. Returns { Ok; Target; TargetExists; Problems; Warnings; Lines }.
+    # Problems block the write (Ok = $false); Warnings are printed and do not.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$Jrs,
@@ -118,6 +122,7 @@ function Get-JrsRelocatePlan {
     $leaf = $src.Substring($src.LastIndexOf("/") + 1)
     $target = if ($dst -eq "/") { "/$leaf" } else { "$dst/$leaf" }
     $problems = @()
+    $warnings = @()
     $targetExists = $false
 
     if ($src -eq "/") { $problems += "source is the repository root; refusing to copy or move it" }
@@ -134,10 +139,13 @@ function Get-JrsRelocatePlan {
                 $dash = @(Get-JrsDashboardsReferencing -Jrs $Jrs -Uri $src -Strict)
                 if ($dash.Count) { $problems += "dashboard(s) reference $src and would break if it moved: $($dash -join ', ')" }
             } catch { $problems += "could not verify which dashboards reference ${src}: $_" }
+            # Jobs do not block a move: the server rewrites a job's reportUnitURI to
+            # the new location (STAGE 10.0, 2026-11-19). Their output folder stays
+            # where it was, which is worth a look but is not a breakage.
             try {
                 $jobs = @(Get-JrsJobList -Jrs $Jrs -ReportUri $src)
-                if ($jobs.Count) { $problems += "$($jobs.Count) scheduled job(s) run $src (ids $(($jobs | ForEach-Object { $_.Id }) -join ',')); a move keeps them pointed at the report but leaves their output folder behind, so move or delete those jobs first" }
-            } catch { $problems += "could not verify which scheduled jobs run ${src}: $_" }
+                if ($jobs.Count) { $warnings += "$($jobs.Count) scheduled job(s) run $src (ids $(($jobs | ForEach-Object { $_.Id }) -join ',')); the server repoints them to the moved report, but their output folder stays where it is -- review them with schedule_job.ps1 -Action get -Id <id>" }
+            } catch { $warnings += "could not check which scheduled jobs run ${src}: $_ (jobs follow a move, so this does not block it)" }
         }
     }
     if ($target -ne $src -and (Test-JrsResource -Jrs $Jrs -Uri $target)) {
@@ -150,7 +158,7 @@ function Get-JrsRelocatePlan {
 
     $verb = if ($Move) { "MOVE" } else { "COPY" }
     $lines = @("  $verb $src -> $target$(if ($targetExists -and $Overwrite) { ' (overwrites the existing target; backed up first)' })")
-    return [pscustomobject]@{ Ok = ($problems.Count -eq 0); Target = $target; TargetExists = $targetExists; Problems = $problems; Lines = $lines }
+    return [pscustomobject]@{ Ok = ($problems.Count -eq 0); Target = $target; TargetExists = $targetExists; Problems = $problems; Warnings = $warnings; Lines = $lines }
 }
 
 if ($MyInvocation.InvocationName -eq ".") { return }   # dot-sourced by tests: functions only
@@ -167,6 +175,7 @@ try {
     Write-Host ""
     Write-Host "RELOCATE PLAN  on $where"
     $p.Lines | ForEach-Object { Write-Host $_ }
+    foreach ($w in @($p.Warnings)) { Write-Host "  WARNING: $w" }
     Write-Host ""
     if (-not $p.Ok) {
         foreach ($x in $p.Problems) { Write-Host "  PRECHECK FAILED: $x" }

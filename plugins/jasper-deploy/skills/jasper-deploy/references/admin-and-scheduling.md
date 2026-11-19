@@ -127,9 +127,12 @@ copy, re-import an overwritten target from its backup, or move it back).
 Refused with exit 2 and no write: missing source; folder source (v1 is single
 resources only); target folder equal to the source's folder; existing target
 without `-Overwrite`; `-Move -Overwrite`; the repository root; a move of a
-resource a dashboard uses (G67) or that scheduled jobs run; a missing target
-folder without `-CreateFolders`. The checks fail closed: when the folder,
-dashboard or job lookup cannot answer, the relocate is refused. A copy/move the
+resource a dashboard uses (G67); a missing target folder without
+`-CreateFolders`. The checks fail closed: when the folder or dashboard lookup
+cannot answer, the relocate is refused. A move of a report that scheduled jobs
+run is NOT refused: the server repoints the jobs to the new URI (STAGE 10.0,
+2026-11-19), so the plan prints a WARNING naming them, because their output
+folder stays where it was; a failed job lookup is a warning too. A copy/move the
 server refuses (4xx) is journaled SKIPPED, so a rollback does not touch it.
 
 ## Data alert — `manage_alert.ps1`

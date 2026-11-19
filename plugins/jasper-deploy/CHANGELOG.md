@@ -1,5 +1,15 @@
 # Changelog — jasper-deploy plugin
 
+## 1.4.1 (2026-11-19) -- relocate: scheduled jobs warn instead of refusing a move
+
+- `relocate_resource.ps1 -Move` no longer refuses a report that scheduled jobs
+  run. The STAGE acceptance run showed the server rewrites each job's
+  `reportUnitURI` to the moved report; only the job's output folder stays
+  behind. The plan now prints a `WARNING:` naming the job ids (review them with
+  `schedule_job.ps1 -Action get -Id <id>`), and a failed job lookup is also a
+  warning rather than a refusal. Dashboard references (G67) still refuse.
+- `Get-JrsRelocatePlan` returns a new `Warnings` list beside `Problems`.
+
 ## 1.4.0 (2026-11-18) -- scheduler pause/resume + repository copy/move
 
 Plan `specs/2026-11-18-jasper-deploy-jobs-and-relocate-plan.md`, from a review of

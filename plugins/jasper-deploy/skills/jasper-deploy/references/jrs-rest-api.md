@@ -79,7 +79,8 @@ helper `Invoke-JrsRelocate` in `_jrs_common.ps1`).
   rewritten to the datasource's new URI and the report still runs; a scheduled
   job's `source.reportUnitURI` follows a moved report (its output folder does
   not). Dashboards were not re-checked on STAGE; the script still refuses a
-  move that a dashboard (G67) or a scheduled job depends on.
+  move that a dashboard depends on (G67), and only warns about scheduled jobs
+  (naming them, since their output folder does not move).
 
 ## reports — synchronous run  **[verified]**
 - `GET /reports{uri}.{fmt}` — fill + export in one blocking call.
