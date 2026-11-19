@@ -1,5 +1,47 @@
 # Changelog — jasper-deploy plugin
 
+## 1.4.0 (2026-11-18) -- scheduler pause/resume + repository copy/move
+
+Plan `specs/2026-11-18-jasper-deploy-jobs-and-relocate-plan.md`, from a review of
+the Jaspersoft community knowledgebase (Wayback captures 2023-11 .. 2025-10).
+Validated offline only (Pester + `tests/mock_jrs.py`); the STAGE acceptance run
+(plan Task 7) is still to do. PROD was not contacted.
+
+### Scheduler control (`schedule_job.ps1`)
+- New actions `pause`, `resume`, `restart` (`-Id 101,103` or `-All`), plan by
+  default, `-Apply` to write, journaled: rollback resumes / re-pauses exactly the
+  jobs the run changed; `restart` is journaled as irreversible.
+- **Never an empty id list** (G66): the REST service treats an empty
+  pause/resume list as every job. `Invoke-JrsJobBatch` refuses one; `-All` is
+  expanded client-side into explicit ids.
+- `state` (read-only), `snapshot` (read-only, PROD-safe, `out/job-snapshots/`)
+  and `restore -Snapshot <file>` (matches by id, else label + report URI;
+  unmatched jobs exit 2) for upgrade windows, including the 7.5.1 -> 7.9.2+
+  upgrade that resumes paused jobs.
+- `-Id` accepts several ids (array or "101,103"); `-Env` passthrough added.
+- New helper file `scripts/_jobs_common.ps1` (dot-sourced by `_jrs_common.ps1`).
+
+### Repository copy / move (`relocate_resource.ps1`, new)
+- Copy (POST) or move (PUT) one resource with `Content-Location`, plan by
+  default, `-Apply` to write, journaled (delete / reimport / move-back
+  compensations). Prechecks refuse folders, no-op targets, existing targets
+  without `-Overwrite`, `-Move -Overwrite`, moves a dashboard depends on (G67),
+  and missing target folders without `-CreateFolders`.
+- `_jrs_common.ps1`: `Invoke-JrsRest -Headers`, `ConvertTo-JrsRepoUri`,
+  `Invoke-JrsRelocate`. New compensation types `move`, `jobs-pause`,
+  `jobs-resume` in `_jrs_run.ps1`.
+
+### Tests and docs
+- `tests/mock_jrs.py`: copy/move, and a stateful scheduler behind `--jobs`
+  (synthetic fixture `tests/fixtures/jobs/jobs.json`; an empty list acts on all
+  jobs, like the real server).
+- New `tests/relocate_resource.Tests.ps1`, `tests/jobs_common.Tests.ps1`; harness
+  and run-journal tests extended (205 passed, 0 failed on Windows PowerShell 5.1 /
+  Pester 3.4).
+- `references/jrs-rest-api.md` (jobs list/state/pause/resume formats, copy/move,
+  G66, G67), `gotchas.md`, `admin-and-scheduling.md`,
+  `upgrade-migration-playbook.md` (scheduler freeze/restore steps 4a / 15a).
+
 ## 1.3.0 (2026-09-28) -- safety model ported from jrsctl
 
 Items 4, 5, 7 and 8 of the jrsctl comparison (spec

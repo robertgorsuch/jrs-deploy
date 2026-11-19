@@ -57,6 +57,22 @@ The backbone the skill scripts already use.
   `application/repository.<type>+json` content type and fields. Use these for a
   non-PostgreSQL/JDBC backend; the JDBC path is the one verified here.
 
+### resources: copy / move  **[doc-only, ref 10.0.0 p.78-79; STAGE check pending]**
+Wrapped by `scripts/relocate_resource.ps1` (plan by default, `-Apply`, journaled;
+helper `Invoke-JrsRelocate` in `_jrs_common.ps1`).
+- **Copy:** `POST /resources/<destination folder>?createFolders=..&overwrite=..`
+  with header `Content-Location: <source uri>`; any body is ignored. `201` + the
+  new descriptor; `404` when the source is not valid.
+- **Move:** the same with `PUT`; the source is removed.
+- The URL is the destination FOLDER and the resource keeps its name
+  (`<folder>/<leaf>`). `createFolders` defaults to `true` server-side; the script
+  sends `false` unless `-CreateFolders`. `overwrite=true` replaces an existing
+  target even of a different type.
+- Not yet confirmed on STAGE (plan Task 7): the status for an existing target
+  without `overwrite`, and whether a moved datasource stays referenced by its
+  reports. A moved report DOES break dashboards that use it (they store URIs, G67),
+  so the script refuses that move.
+
 ## reports — synchronous run  **[verified]**
 - `GET /reports{uri}.{fmt}` — fill + export in one blocking call.
   Formats confirmed `200` here: **pdf, html, xlsx, csv, docx, pptx** (docs also
@@ -237,6 +253,23 @@ recurring, output formats, repo destination, optional mail).
 - `GET  /jobs/{id}` — full descriptor (`Accept: application/job+json`).
 - `DELETE /jobs/{id}` — `200`, echoes the id; afterward `GET /jobs/{id}` →
   `resource.not.found`.
+- **List shape [verified STAGE 10.0.0, 2026-11-18]:** `{"jobsummary":[{id, version,
+  label, reportUnitURI, reportLabel, description, state:{value, nextFireTime},
+  owner}]}`; `204` when there are none.
+- `GET /jobs/{id}/state` **[verified]** -- `{"nextFireTime":"...","value":"NORMAL"}`
+  (JSON and XML); `value` is `NORMAL | EXECUTING | PAUSED | <error state>`;
+  `404` when the job does not exist or is no longer active (ref p.225).
+- `POST /jobs/pause`, `/jobs/resume`, `/jobs/restart` (ref p.229-232) -- body
+  `{"jobId":[1236,1240]}`; `200` echoes the ids acted on; unknown ids are
+  ignored without error. **An EMPTY body or list on pause/resume acts on EVERY
+  job in the scheduler (G66).** Resume does not run triggers missed while the
+  job was paused. Wrapped by `schedule_job.ps1 -Action pause|resume|restart|state|
+  snapshot|restore` (helpers in `_jobs_common.ps1`); the empty-list case is
+  refused client-side.
+- Job ownership cannot be changed through the UI or REST; the KB's only route is
+  a direct `UPDATE jireportjob SET owner = ...` on the repository database (KB
+  *transferring-ownership-scheduled-report-jobs*). That is a DBA change with a DB
+  backup first, so the skill documents it and does not automate it.
 
 ## permissions  **[verified]** (set → confirm → restore round-trip)
 A resource with no explicit ACL returns `204` and inherits from its parent
@@ -626,6 +659,24 @@ Handled-by (the script or flag that already deals with it). ASCII only.
 - Handled-by: `deploy_report.ps1` (`-Control`, `-QueryControl`,
   `-QueryMultiControl`); the inputControls section above documents the
   round-trip.
+
+### G66
+An EMPTY job-id list pauses or resumes EVERY job. `POST /rest_v2/jobs/pause` or
+`/jobs/resume` with an empty body, `{}`, or `{"jobId":[]}` acts on all jobs in the
+scheduler (REST ref 10.0.0 p.229-231), so a script whose id filter matched
+nothing would pause the whole server. `Invoke-JrsJobBatch` (`_jobs_common.ps1`)
+refuses an empty list before sending anything, and `schedule_job.ps1 -All`
+expands "all" into an explicit id list (the journal then records the exact ids,
+and a rollback resumes only those).
+
+### G67
+Moving a resource breaks the dashboards that use it. Dashboards store their tiles'
+report URIs in their own descriptor/companion files, so after a move the
+dashboard points at a URI that no longer exists. `relocate_resource.ps1 -Move`
+checks `Get-JrsDashboardsReferencing` and refuses (exit 2); copy the report
+instead, or recompose the dashboard against the new URI. Whether report units
+keep their datasource reference across a datasource move is not yet verified on
+STAGE.
 
 ## Gotchas: export/import, permissions/admin, alerts/options/run, environment
 

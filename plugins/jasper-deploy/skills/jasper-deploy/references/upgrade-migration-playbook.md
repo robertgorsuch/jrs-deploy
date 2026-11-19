@@ -362,6 +362,12 @@ pre-19c + PostgreSQL <12 + DB2 10.5; 10.0 drops MySQL 5.7 + PostgreSQL 12/13;
    Upgrade the repo DB first if it falls off the support list at the target.
 4. Back up the keystore: copy $HOME/.jrsks and $HOME/.jrsksp (of the installing OS
    user) to a secure JS_BACKUP folder. Non-negotiable for any 7.5+ source (sec 4a).
+4a. Freeze the scheduler. Skill: `schedule_job.ps1 -Action snapshot` (read-only,
+   keeps every job's state), then `schedule_job.ps1 -Action pause -All -Apply`
+   so no job fires mid-upgrade (KB *how-batch-disable-all-active-scheduled-
+   report-jobs-prior-upgrade* suggests the UI or `qrtz_triggers.trigger_state`;
+   the REST pause is the supported route). Never send an empty pause list: it
+   pauses every job anyway, but unjournaled (G66).
 5. Back up the repository database (pg_dump or DB-native) and the whole
    <js-install> tree, including the deployed webapp.
 6. Export the repository as a portable catalog:
@@ -388,6 +394,14 @@ pre-19c + PostgreSQL <12 + DB2 10.5; 10.0 drops MySQL 5.7 + PostgreSQL 12/13;
 15. Verify: `GET /rest_v2/serverInfo` shows the new version; log in; fill a sample
     report; test datasource connections. Skill: doctor.ps1 + smoke_test.ps1 +
     verify_report.ps1 cover serverInfo, connections, and a sample fill.
+15a. Put the scheduler back: `schedule_job.ps1 -Action restore -Snapshot <pre-upgrade
+   file>` (plan), then with `-Apply`. Upgrading from 7.5.1 or earlier to 7.9.2+
+   RESUMES jobs that were paused, because the Quartz `org.quartz.scheduler.
+   instanceName` changed from `quartzScheduler` to `JasperServerScheduler` in
+   `js.quartz.base.properties` (KB *paused-scheduled-jobs-restarted-after-
+   upgrade*); restore re-pauses them. A newdb/import hop gives jobs new ids:
+   restore then matches by label + report URI and lists anything it cannot
+   match (exit 2). Missed triggers are not re-run on resume.
 16. Reimport audit/access/monitoring data via UI Import if the hop used newdb
     (sec 4b); rerun transfer-audit-data on Split samedb.
 17. Reapply UI customizations on the new source packages; rebuild and publish
