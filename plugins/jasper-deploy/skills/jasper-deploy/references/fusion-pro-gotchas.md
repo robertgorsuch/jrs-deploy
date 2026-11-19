@@ -62,3 +62,37 @@ element is wrong. The notes below are the ones that cost trial-and-error.
     optional `valueDisplay`, and `<interval label= backgroundColor=>` color zones.
   - Element-name gotchas: the dial-face color is **`meterColor`** (not
     `meterBackgroundColor`); a `<font>`'s size attr is **`fontSize`** (not `size`).
+
+## FusionMaps bubble / marker layer (`fm:shapeData` + `c:markerData`) — verified 2026-09-25
+Working example: `report/italy/italy_region_bubble_map.jrxml` (Italy map, one bubble per
+region sized by revenue per 1,000 residents; seed data in `report/italy/italy_demo_data.sql`).
+- **Both item lists use the components namespace.** `fm:shapeData` is typed `c:ItemData`,
+  so its children are `<c:item><c:itemProperty .../></c:item>` exactly like `c:markerData`.
+  A plain `<item>` (jasperreports namespace) fails schema validation with an opaque deploy
+  400; the real message (`cvc-complex-type.2.4.a ... {components}:item is expected`) is only
+  in `WEB-INF/logs/jasperserver.log`. Declare `xmlns:c` once on the root `jasperReport`.
+- **Item shape:** `<dataset><datasetRun subDataset=".."><connectionExpression>` then
+  `<c:item>` with `<c:itemProperty name="x" value=".."/>` or
+  `<c:itemProperty name="x"><valueExpression>..</valueExpression></c:itemProperty>`
+  (`valueExpression` is unprefixed). Both lists can point at the same subDataset.
+- **Required properties** (compile-time verifier): marker = `id`, `x`, `y`; shape = `id`,
+  `type` (`circle`). Marker `shapeId` links to a shape id (default `circle`). Marker also
+  honours `label`, `labelPos`, `toolText`, `link`, `scale` and **`radius`** — a per-marker
+  radius works even without a shape. Any other property is passed straight through as a
+  FusionMaps XML attribute (`fillAlpha`, `borderColor`, `borderThickness`, ...).
+- **Never use the `color` property on a shape/marker item.** The JR base class
+  (`FillPlaceItem`, google-maps jar) converts it to bare hex (`2EC0CB`), then the fusion
+  `FillShapeItem` re-parses that as a decimal integer -> `NumberFormatException: For input
+  string: "2EC0CB"` at fill time for any hex starting with a digit. Use the native FusionMaps
+  attribute **`fillColor`** with a bare hex value (`value="2EC0CB"`) instead, plus a map-level
+  `markerBgColor` as a fallback.
+- **Coordinates:** marker `x`/`y` are in the map's base canvas (`baseWidth` x `baseHeight`,
+  e.g. Italy 480 x 560); the outline path numbers in `fusioncharts.<map>.js` are
+  `baseScaleFactor` (10) times that, so `centroid(outline) / 10` lands the bubble on the
+  region. Cross-check against each entity's `labelPosition:[x,y]` (already in base units).
+  Outline numbers can be scientific (`4E3`) — parse with an exponent-aware regex or the
+  x/y pairs shift and centroids land in the sea.
+- Set `autoScaleMarkers` = TRUE so bubble radii scale with the rendered map; size by
+  `sqrt(metric / max)` so bubble AREA is proportional to the metric.
+- Italy entity keys: `"001"`..`"021"` (20 regions + `"021"` San Marino), labels/shortLabels
+  in the JS (`shortLabel:"LO"` etc.).
