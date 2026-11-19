@@ -86,12 +86,34 @@ Describe "final-review fixes: relocate fails closed" {
         ($p.Problems -join ";") | Should Match "root"
     }
     Context "jobs" {
-        It "refuses a move when scheduled jobs run the report" {
+        # STAGE 10.0 (2026-11-19): a job's reportUnitURI follows a moved report,
+        # only its output folder stays behind -- so jobs warn, they do not refuse.
+        It "allows a move when scheduled jobs run the report, with a warning naming them" {
             Mock Test-JrsResource { param($Jrs, $Uri) $Uri -ne "/reports/b/r" }
-            Mock Get-JrsJobList { @([pscustomobject]@{ Id = 7 }) }
+            Mock Get-JrsJobList { @([pscustomobject]@{ Id = 7 }, [pscustomobject]@{ Id = 9 }) }
             $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/reports/a/r" -TargetFolder "/reports/b" -Move
-            $p.Ok | Should Be $false
-            ($p.Problems -join ";") | Should Match "scheduled job"
+            $p.Ok | Should Be $true
+            @($p.Problems).Count | Should Be 0
+            ($p.Warnings -join ";") | Should Match "2 scheduled job\(s\)"
+            ($p.Warnings -join ";") | Should Match "7,9"
+            ($p.Warnings -join ";") | Should Match "output folder"
+        }
+    }
+    Context "jobs check unknown" {
+        It "warns (does not refuse) when the job lookup cannot answer" {
+            Mock Test-JrsResource { param($Jrs, $Uri) $Uri -ne "/reports/b/r" }
+            Mock Get-JrsJobList { throw "job list failed: HTTP 500" }
+            $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/reports/a/r" -TargetFolder "/reports/b" -Move
+            $p.Ok | Should Be $true
+            ($p.Warnings -join ";") | Should Match "could not check"
+        }
+    }
+    Context "no jobs" {
+        It "has no warnings for a plain move" {
+            Mock Test-JrsResource { param($Jrs, $Uri) $Uri -ne "/reports/b/r" }
+            $p = Get-JrsRelocatePlan -Jrs $script:Dead -Source "/reports/a/r" -TargetFolder "/reports/b" -Move
+            $p.Ok | Should Be $true
+            @($p.Warnings).Count | Should Be 0
         }
     }
     Context "folder check unknown" {
